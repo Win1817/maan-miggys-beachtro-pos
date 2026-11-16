@@ -77,6 +77,11 @@ public partial class App
         {
             var pragmas = _host.Services.GetRequiredService<DatabaseInitializer>().Initialize(profile);
             Log.Information("Database ready: {Pragmas}", pragmas);
+
+            // Reconcile number series with the external journal before any sale can start.
+            var numbers = _host.Services.GetRequiredService<Beachtro.Application.Recovery.INumberSeriesService>()
+                .ReconcileAsync().GetAwaiter().GetResult();
+            Log.Information("Number series reconciled: {Blocked} on hold, journal repaired: {Repaired}", numbers.Blocked.Count, numbers.JournalRepaired);
         }
         catch (Exception ex) when (ex is DatabaseNotReadyException or Microsoft.Data.Sqlite.SqliteException or IOException)
         {

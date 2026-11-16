@@ -4,7 +4,7 @@ Native Windows 11 point-of-sale for Ma'an and Miggy's Beachtro.
 
 - Requirements baseline: [BRD v1.2](Maan_and_Miggys_Beachtro_POS_BRD_v1.2.md) (never edited)
 - Design: [design/](design/) — start with [IMPLEMENTATION_READINESS.md](design/IMPLEMENTATION_READINESS.md)
-- Current authorization: [POS-DEC-003](design/POS-DEC-003.md) — milestone 4; [POS-DEC-002](design/POS-DEC-002.md) — milestones 0–3. Test profile only
+- Current authorization: [POS-DEC-004](design/POS-DEC-004.md) — milestone 5; earlier: [POS-DEC-003](design/POS-DEC-003.md), [POS-DEC-002](design/POS-DEC-002.md). Test profile only
 
 ## Build
 
@@ -20,16 +20,17 @@ Package versions are pinned centrally in `Directory.Packages.props`; restores ar
 
 ## Status
 
-Milestones 0–4 complete (setup, skeleton, money kernel, database, identity/authorization/audit and versioned settings profiles). Work stops here pending the next decision (POS-DEC-003). No UI for sign-in exists yet; it arrives with the screens milestone.
+Milestones 0–5 complete: setup, skeleton, money kernel, database, identity/authorization/audit, versioned settings profiles, catalog/stock, transaction numbering with an external journal, checkout, refunds/voids and backup/restore core. Work stops here pending the next decision (POS-DEC-004). There are no screens yet beyond the shell; they arrive with milestone 7.
 
 | Project | Purpose |
 |---|---|
 | `src/Beachtro.Domain` | Exact money kernel (`Financial/`), persisted vocabularies (`Model/`) |
 | `src/Beachtro.Application` | Ports, typed results, capability matrix/role templates, sessions, service contracts |
-| `src/Beachtro.Infrastructure` | Data paths, lock, EF Core/SQLite schema, migrations, guard triggers, identity and profile services |
+| `src/Beachtro.Infrastructure` | Data paths, lock, EF Core/SQLite schema, migrations, guard triggers, identity, profiles, catalog, numbering journal, checkout, corrections, backup/restore |
 | `src/Beachtro.Desktop` | WPF shell and composition root (Test profile only) |
 | `tests/*` | Domain fixtures/invariants, real-SQLite schema/constraint tests, architecture rules |
 
-Data lives in `%LocalAppData%\BeachtroPOS-Test\`. New migration: `dotnet ef migrations add <Name> --project src/Beachtro.Infrastructure --output-dir Persistence/Migrations --namespace Beachtro.Infrastructure.Persistence.Migrations`, then move `PosDbContextModelSnapshot.cs` back into `Persistence/Migrations/` if EF places it elsewhere.
+Data lives in `%LocalAppData%\BeachtroPOS-Test\` (`data
+umbers.journal` is the number reservation journal: never delete or edit it). New migration: `dotnet ef migrations add <Name> --project src/Beachtro.Infrastructure --output-dir Persistence/Migrations --namespace Beachtro.Infrastructure.Persistence.Migrations`, then move `PosDbContextModelSnapshot.cs` back into `Persistence/Migrations/` if EF places it elsewhere.
 
 **Not production software.** It runs only in the Test profile with synthetic data. No real tax, receipt, printer or Google Drive configuration exists.

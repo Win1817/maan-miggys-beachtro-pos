@@ -459,7 +459,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_CashierShifts_CashierUserId_Domain", "length(\"CashierUserId\") = 36 AND \"CashierUserId\" = lower(\"CashierUserId\")");
 
-                            t.HasCheckConstraint("CK_CashierShifts_Close", "(\"ClosedUtc\" IS NULL AND \"CountedCashM\" IS NULL AND \"ExpectedCashM\" IS NULL AND \"VarianceM\" IS NULL AND \"ClosedByUserId\" IS NULL)\nOR (\"ClosedUtc\" IS NOT NULL AND \"CountedCashM\" IS NOT NULL AND \"ExpectedCashM\" IS NOT NULL AND \"VarianceM\" IS NOT NULL\n    AND \"ClosedByUserId\" IS NOT NULL AND \"CountedCashM\" >= 0 AND \"ClosedUtc\" >= \"OpenedUtc\"\n    AND \"VarianceM\" = \"CountedCashM\" - \"ExpectedCashM\")");
+                            t.HasCheckConstraint("CK_CashierShifts_Close", "(\"ClosedUtc\" IS NULL AND \"CountedCashM\" IS NULL AND \"ExpectedCashM\" IS NULL AND \"VarianceM\" IS NULL AND \"ClosedByUserId\" IS NULL)\r\nOR (\"ClosedUtc\" IS NOT NULL AND \"CountedCashM\" IS NOT NULL AND \"ExpectedCashM\" IS NOT NULL AND \"VarianceM\" IS NOT NULL\r\n    AND \"ClosedByUserId\" IS NOT NULL AND \"CountedCashM\" >= 0 AND \"ClosedUtc\" >= \"OpenedUtc\"\r\n    AND \"VarianceM\" = \"CountedCashM\" - \"ExpectedCashM\")");
 
                             t.HasCheckConstraint("CK_CashierShifts_ClosedByUserId_Domain", "\"ClosedByUserId\" IS NULL OR (length(\"ClosedByUserId\") = 36 AND \"ClosedByUserId\" = lower(\"ClosedByUserId\"))");
 
@@ -952,7 +952,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_Discounts_Type_Domain", "\"Type\" IN ('FixedM', 'PercentPpm')");
 
-                            t.HasCheckConstraint("CK_Discounts_Value", "(\"Type\" = 'FixedM' AND \"ValueScaled\" > 0 AND \"ValueScaled\" <= 100000000000)\nOR (\"Type\" = 'PercentPpm' AND \"ValueScaled\" > 0 AND \"ValueScaled\" <= 1000000)");
+                            t.HasCheckConstraint("CK_Discounts_Value", "(\"Type\" = 'FixedM' AND \"ValueScaled\" > 0 AND \"ValueScaled\" <= 100000000000)\r\nOR (\"Type\" = 'PercentPpm' AND \"ValueScaled\" > 0 AND \"ValueScaled\" <= 1000000)");
                         });
                 });
 
@@ -1178,7 +1178,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_InventoryMovements_RequestId_Domain", "length(\"RequestId\") = 36 AND \"RequestId\" = lower(\"RequestId\")");
 
-                            t.HasCheckConstraint("CK_InventoryMovements_Source", "(\"Type\" = 'Sale' AND \"OrderId\" IS NOT NULL AND \"OrderItemId\" IS NOT NULL AND \"CorrectionItemId\" IS NULL AND \"DeltaQ\" < 0)\nOR (\"Type\" = 'Return' AND \"CorrectionItemId\" IS NOT NULL AND \"OrderItemId\" IS NULL AND \"DeltaQ\" > 0)\nOR (\"Type\" IN ('Opening', 'Adjustment') AND \"OrderId\" IS NULL AND \"OrderItemId\" IS NULL AND \"CorrectionItemId\" IS NULL\n    AND \"Reason\" IS NOT NULL AND length(trim(\"Reason\")) > 0)");
+                            t.HasCheckConstraint("CK_InventoryMovements_Source", "(\"Type\" = 'Sale' AND \"OrderId\" IS NOT NULL AND \"OrderItemId\" IS NOT NULL AND \"CorrectionItemId\" IS NULL AND \"DeltaQ\" < 0)\r\nOR (\"Type\" = 'Return' AND \"CorrectionItemId\" IS NOT NULL AND \"OrderItemId\" IS NULL AND \"DeltaQ\" > 0)\r\nOR (\"Type\" IN ('Opening', 'Adjustment') AND \"OrderId\" IS NULL AND \"OrderItemId\" IS NULL AND \"CorrectionItemId\" IS NULL\r\n    AND \"Reason\" IS NOT NULL AND length(trim(\"Reason\")) > 0)");
 
                             t.HasCheckConstraint("CK_InventoryMovements_Type_Domain", "\"Type\" IN ('Opening', 'Sale', 'Adjustment', 'Return')");
                         });
@@ -1869,6 +1869,10 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TaxKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("TrackStock")
                         .HasColumnType("INTEGER");
 
@@ -1906,6 +1910,8 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Products_Price", " \"UnitPriceM\" > 0 AND \"UnitPriceM\" <= 100000000000 ");
 
                             t.HasCheckConstraint("CK_Products_Sku", "length(trim(\"Sku\")) > 0 AND length(trim(\"NormalizedSku\")) > 0");
+
+                            t.HasCheckConstraint("CK_Products_TaxKey", "length(trim(\"TaxKey\")) > 0");
 
                             t.HasCheckConstraint("CK_Products_TrackStock_Domain", "\"TrackStock\" IN (0, 1)");
 

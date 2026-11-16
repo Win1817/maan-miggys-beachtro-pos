@@ -29,6 +29,12 @@ public sealed class LocalDataPaths
     public string DatabaseFile => Path.Combine(Data, "pos.db");
     public string LockFile => Path.Combine(Data, "app.lock");
 
+    /// <summary>
+    /// External number reservation journal (finance design §Number allocation). Lives beside, not
+    /// inside, the database so restoring an older database file cannot roll it back.
+    /// </summary>
+    public string NumberJournalFile => Path.Combine(Data, "numbers.journal");
+
     public IEnumerable<string> AllDirectories => [Data, Artifacts, Backups, Logs, Secrets, Recovery];
 
     /// <summary>Default per-user location, e.g. %LocalAppData%\BeachtroPOS-Test.</summary>

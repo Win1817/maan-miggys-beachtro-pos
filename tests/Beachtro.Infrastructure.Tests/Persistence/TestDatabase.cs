@@ -1,6 +1,7 @@
 using Beachtro.Application.Ports;
 using Beachtro.Application.Runtime;
 using Beachtro.Infrastructure.Persistence;
+using Beachtro.Infrastructure.Runtime;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,7 +14,9 @@ public sealed class TestDatabase : IDisposable
 
     public TestDatabase()
     {
-        DatabaseFile = Path.Combine(_dir.Path, "pos.db");
+        Paths = new LocalDataPaths(_dir.Path, RuntimeProfile.Test);
+        Paths.EnsureCreated();
+        DatabaseFile = Paths.DatabaseFile;
         var builder = new DbContextOptionsBuilder<PosDbContext>();
         PersistenceOptions.Configure(builder, DatabaseFile);
         Options = builder.Options;
@@ -21,6 +24,7 @@ public sealed class TestDatabase : IDisposable
         Pragmas = new DatabaseInitializer(Factory, new FixedClock()).Initialize(RuntimeProfile.Test);
     }
 
+    public LocalDataPaths Paths { get; }
     public string DatabaseFile { get; }
     public DbContextOptions<PosDbContext> Options { get; }
     public IDbContextFactory<PosDbContext> Factory { get; }

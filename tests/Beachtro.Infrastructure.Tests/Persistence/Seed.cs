@@ -38,7 +38,7 @@ public static class Seed
         var product = new Product
         {
             Id = Guid.NewGuid(), CategoryId = category.Id, Sku = "TEST-001", NormalizedSku = "TEST-001", Name = "Synthetic Iced Tea",
-            UnitPriceM = 100_00, CurrencyCode = "PHP", CurrencyExponent = 2, UnitStepQ = 1000, TrackStock = true, IsActive = true, UpdatedUtc = Now,
+            UnitPriceM = 100_00, CurrencyCode = "PHP", CurrencyExponent = 2, UnitStepQ = 1000, TrackStock = true, TaxKey = "NONE", IsActive = true, UpdatedUtc = Now,
         };
         var policy = new PolicyVersion
         {

@@ -25,6 +25,10 @@ public sealed class Product
     public int CurrencyExponent { get; set; }
     public long UnitStepQ { get; set; }
     public bool TrackStock { get; set; }
+
+    /// <summary>Tax entry key in the effective calculation profile (POS-DEC-004).</summary>
+    public required string TaxKey { get; set; }
+
     public bool IsActive { get; set; }
     public int Version { get; set; } = 1;
     public long UpdatedUtc { get; set; }

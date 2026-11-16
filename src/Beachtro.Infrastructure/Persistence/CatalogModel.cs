@@ -23,6 +23,7 @@ internal static class CatalogModel
                 .Check("UnitStep", """ "UnitStepQ" IN (1, 1000) """)
                 .Check("Sku", NotBlank("Sku") + " AND " + NotBlank("NormalizedSku"))
                 .Check("Name", NotBlank("Name"))
+                .Check("TaxKey", NotBlank("TaxKey"))
                 .Check("Version", """ "Version" >= 1 """));
             b.HasIndex(x => x.NormalizedSku).IsUnique();
             b.HasIndex(x => x.CategoryId);
