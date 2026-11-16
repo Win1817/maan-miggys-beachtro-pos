@@ -995,6 +995,9 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("BootstrapCompletedUtc")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("CurrentBusinessProfileId")
                         .HasColumnType("TEXT");
 

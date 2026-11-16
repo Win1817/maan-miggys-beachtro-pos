@@ -15,6 +15,11 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IClock, SystemClock>();
         services.AddDbContextFactory<PosDbContext>(options => PersistenceOptions.Configure(options, paths.DatabaseFile));
         services.AddSingleton<DatabaseInitializer>();
+        services.AddSingleton<WriteGate>();
+        services.AddSingleton<Security.PosPasswordHasher>();
+        services.AddSingleton<Application.Security.IIdentityService, Security.IdentityService>();
+        services.AddSingleton<Application.Configuration.IProfileService, Configuration.ProfileService>();
+        services.AddSingleton<Application.Security.SessionManager>();
         return services;
     }
 }

@@ -5,6 +5,8 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>Beachtro.Architecture.Tests</RootNamespace>
+    <!-- Short offline tests; passing TestContext cancellation tokens everywhere adds noise only. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
     <UseWPF>true</UseWPF>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>

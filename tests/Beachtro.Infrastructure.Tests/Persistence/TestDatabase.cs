@@ -74,5 +74,7 @@ public sealed class TestDatabase : IDisposable
     private sealed class FixedClock : IClock
     {
         public long UtcNowMilliseconds => 1_763_300_000_000;
+
+        public long MonotonicMilliseconds => 0;
     }
 }

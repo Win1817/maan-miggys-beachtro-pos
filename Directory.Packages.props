@@ -4,6 +4,7 @@
     Platform line is .NET 10 LTS / EF Core 10 per D-10; EF Core 11.x targets .NET 11 and is
     deliberately not used. Licences reviewed 2026-11-16:
       Microsoft.EntityFrameworkCore.*, Microsoft.Extensions.*  MIT
+      Microsoft.Extensions.Identity.Core (PasswordHasher only)  MIT
       Serilog.*                                                Apache-2.0
       xunit.v3 (Microsoft.Testing.Platform runner)             Apache-2.0
     OAuth, PDF and installer dependencies are deferred to the milestones that need them.
@@ -16,6 +17,8 @@
     <!-- Persistence -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
+    <!-- Security: maintained PBKDF2 password hasher (security design §Authentication) -->
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.15" />
     <!-- Host / logging -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />

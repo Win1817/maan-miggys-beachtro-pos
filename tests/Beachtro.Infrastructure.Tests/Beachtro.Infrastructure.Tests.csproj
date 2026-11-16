@@ -5,6 +5,8 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>Beachtro.Infrastructure.Tests</RootNamespace>
+    <!-- Short offline tests; passing TestContext cancellation tokens everywhere adds noise only. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
 
   </PropertyGroup>
   <ItemGroup>

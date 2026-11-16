@@ -118,6 +118,10 @@ public sealed class InstallationState
     public Guid? CurrentBusinessProfileId { get; set; }
     public long LastObservedUtc { get; set; }
     public string? LastFinancialBusinessDate { get; set; }
+
+    /// <summary>Set once when the first Owner is created; bootstrap never runs again (security design §Bootstrap).</summary>
+    public long? BootstrapCompletedUtc { get; set; }
+
     public int Version { get; set; } = 1;
 }
 

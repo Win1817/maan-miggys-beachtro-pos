@@ -54,6 +54,19 @@
           "Serilog": "4.2.0"
         }
       },
+      "Microsoft.AspNetCore.Cryptography.Internal": {
+        "type": "Transitive",
+        "resolved": "10.0.15",
+        "contentHash": "QsgH1P7/bDthx8inoa659//xBmWyKQri+NxQz9X7TgubhQzNL/eZllbay0jB2LXoxf3i1BJ8xgdNzyUqZuwhTw=="
+      },
+      "Microsoft.AspNetCore.Cryptography.KeyDerivation": {
+        "type": "Transitive",
+        "resolved": "10.0.15",
+        "contentHash": "egaMlQze3SMaBjwhzwU05K8KbJ3Il5XRTkTyC85HREzrbpJr42oFKXTvZYmxIEFRrQATBV5uwPCjFY2ujhL3dg==",
+        "dependencies": {
+          "Microsoft.AspNetCore.Cryptography.Internal": "10.0.15"
+        }
+      },
       "Microsoft.Data.Sqlite.Core": {
         "type": "Transitive",
         "resolved": "10.0.15",
@@ -438,7 +451,8 @@
           "Beachtro.Application": "[0.1.0, )",
           "Beachtro.Domain": "[0.1.0, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.15, )",
-          "Microsoft.Extensions.Hosting": "[10.0.15, )"
+          "Microsoft.Extensions.Hosting": "[10.0.15, )",
+          "Microsoft.Extensions.Identity.Core": "[10.0.15, )"
         }
       },
       "Microsoft.EntityFrameworkCore.Sqlite": {
@@ -454,6 +468,18 @@
           "Microsoft.Extensions.Logging": "10.0.15",
           "SQLitePCLRaw.bundle_e_sqlite3": "2.1.13",
           "SQLitePCLRaw.core": "2.1.13"
+        }
+      },
+      "Microsoft.Extensions.Identity.Core": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.15, )",
+        "resolved": "10.0.15",
+        "contentHash": "XMr9hhUFL/9IeOCsaLxJH974n+cYDWs3NpDwliXcvIHFoVlcNdr5/kPPeRYz1IDxW35WBbo9w3mYfYhJJtJ6mA==",
+        "dependencies": {
+          "Microsoft.AspNetCore.Cryptography.KeyDerivation": "10.0.15",
+          "Microsoft.Extensions.Diagnostics": "10.0.15",
+          "Microsoft.Extensions.Logging": "10.0.15",
+          "Microsoft.Extensions.Options": "10.0.15"
         }
       }
     },
