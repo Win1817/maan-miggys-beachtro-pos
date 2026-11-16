@@ -1,0 +1,21 @@
+<Project>
+  <!-- Shared build settings for every project (IB-01 reproducible build). -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <!-- Integer overflow must throw, never wrap (BRD §8 decimal-safe money; F-12). -->
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- Lock files make restores reproducible; commit packages.lock.json. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Company>Ma'an and Miggy's Beachtro</Company>
+    <Product>Beachtro POS</Product>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>
