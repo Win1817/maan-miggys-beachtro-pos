@@ -1,4 +1,5 @@
 using Beachtro.Application.Ports;
+using Beachtro.Infrastructure.Persistence;
 using Beachtro.Infrastructure.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,6 +13,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton(paths);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IClock, SystemClock>();
+        services.AddDbContextFactory<PosDbContext>(options => PersistenceOptions.Configure(options, paths.DatabaseFile));
+        services.AddSingleton<DatabaseInitializer>();
         return services;
     }
 }

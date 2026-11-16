@@ -1,6 +1,8 @@
 ﻿using System.Windows;
 using Beachtro.Application.Runtime;
+using System.IO;
 using Beachtro.Infrastructure;
+using Beachtro.Infrastructure.Persistence;
 using Beachtro.Infrastructure.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -10,8 +12,8 @@ namespace Beachtro.Desktop;
 
 /// <summary>
 /// Composition root. Startup order follows system design §Runtime: resolve profile → data
-/// directory → single-instance lock → logging → host → UI. Schema verification/migration is
-/// added with the database milestone.
+/// directory → single-instance lock → logging → host → database (Test profile: migrate and verify
+/// pragmas/integrity) → UI.
 /// </summary>
 public partial class App
 {
@@ -46,9 +48,11 @@ public partial class App
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
+            // EF Core logs SQL at Information; keep commands and parameters out of logs (security design §Audit/privacy).
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning)
             .Enrich.FromLogContext()
             .WriteTo.File(
-                System.IO.Path.Combine(paths.Logs, "pos-.log"),
+                Path.Combine(paths.Logs, "pos-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 30,
                 formatProvider: System.Globalization.CultureInfo.InvariantCulture)
@@ -57,6 +61,7 @@ public partial class App
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
         {
             DisableDefaults = true,
+            EnvironmentName = profile.ToString(),
             ContentRootPath = AppContext.BaseDirectory,
         });
         builder.Services.AddSerilog();
@@ -67,6 +72,19 @@ public partial class App
         _host.Start();
 
         Log.Information("Started in {Profile} profile; data root {Root}", profile, paths.Root);
+
+        try
+        {
+            var pragmas = _host.Services.GetRequiredService<DatabaseInitializer>().Initialize(profile);
+            Log.Information("Database ready: {Pragmas}", pragmas);
+        }
+        catch (Exception ex) when (ex is DatabaseNotReadyException or Microsoft.Data.Sqlite.SqliteException or IOException)
+        {
+            // Never fall back to a fresh empty ledger; stop and leave the data for diagnosis.
+            Log.Fatal(ex, "Database initialization failed");
+            Fail("The local database could not be opened safely. Details are in the log file.");
+            return;
+        }
 
         var window = _host.Services.GetRequiredService<MainWindow>();
         MainWindow = window;

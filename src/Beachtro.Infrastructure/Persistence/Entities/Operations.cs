@@ -1,0 +1,158 @@
+using Beachtro.Domain.Model;
+
+namespace Beachtro.Infrastructure.Persistence.Entities;
+
+public sealed class PrintJob
+{
+    public Guid Id { get; set; }
+    public Guid? OrderId { get; set; }
+    public Guid? CorrectionId { get; set; }
+    public Guid RequestId { get; set; }
+    public PrintPurpose Purpose { get; set; }
+
+    /// <summary>Required for Purpose Test, which carries no financial source and prints a TEST marker.</summary>
+    public bool IsTestModel { get; set; }
+
+    public int TemplateVersion { get; set; }
+    public required string ModelJson { get; set; }
+    public required string ModelSha256 { get; set; }
+    public PrintJobState State { get; set; }
+    public int AttemptCount { get; set; }
+    public string? PrinterName { get; set; }
+    public string? SpoolJobId { get; set; }
+    public long? SubmittedUtc { get; set; }
+    public string? LastError { get; set; }
+    public Guid CreatedByUserId { get; set; }
+    public long CreatedUtc { get; set; }
+    public string? Reason { get; set; }
+}
+
+public sealed class ReportRun
+{
+    public Guid Id { get; set; }
+    public ReportType Type { get; set; }
+    public required string RangeStartDate { get; set; }
+    public required string RangeEndExclusiveDate { get; set; }
+    public Guid CalendarPolicyId { get; set; }
+    public required string FiltersJson { get; set; }
+    public required string FiltersSha256 { get; set; }
+    public required string LedgerWatermarkJson { get; set; }
+    public int Revision { get; set; }
+    public long GeneratedUtc { get; set; }
+    public Guid GeneratedByUserId { get; set; }
+    public required string SnapshotJson { get; set; }
+    public required string SnapshotSha256 { get; set; }
+}
+
+public sealed class ArtifactRecord
+{
+    public Guid Id { get; set; }
+    public required string LogicalKey { get; set; }
+    public ArtifactType Type { get; set; }
+    public Guid SourceId { get; set; }
+    public Guid? OrderId { get; set; }
+    public Guid? CorrectionId { get; set; }
+    public Guid? ReportRunId { get; set; }
+    public Guid? BackupId { get; set; }
+    public int PayloadSchemaVersion { get; set; }
+    public string? RelativePath { get; set; }
+    public string? Sha256 { get; set; }
+    public long? SizeBytes { get; set; }
+    public ArtifactState State { get; set; }
+    public long CreatedUtc { get; set; }
+    public long? MaterializedUtc { get; set; }
+}
+
+/// <summary>Table "SyncQueue".</summary>
+public sealed class SyncQueueItem
+{
+    public Guid Id { get; set; }
+    public Guid ArtifactId { get; set; }
+    public required string DestinationFolderKey { get; set; }
+    public string? RemoteFileId { get; set; }
+    public Guid AccountBindingId { get; set; }
+    public SyncState State { get; set; }
+    public int AttemptCount { get; set; }
+    public long NextAttemptUtc { get; set; }
+    public string? LeaseOwner { get; set; }
+    public long? LeaseExpiresUtc { get; set; }
+    public string? LastErrorCode { get; set; }
+    public long CreatedUtc { get; set; }
+    public long? CompletedUtc { get; set; }
+    public int Version { get; set; } = 1;
+}
+
+/// <summary>Table "SyncHistory". Outcome is set exactly once, together with FinishedUtc.</summary>
+public sealed class SyncAttempt
+{
+    public Guid Id { get; set; }
+    public Guid QueueId { get; set; }
+    public int AttemptNo { get; set; }
+    public long StartedUtc { get; set; }
+    public long? FinishedUtc { get; set; }
+    public SyncOutcome? Outcome { get; set; }
+    public int? HttpCode { get; set; }
+    public string? SafeError { get; set; }
+    public string? RemoteFileId { get; set; }
+    public Guid CorrelationId { get; set; }
+}
+
+public sealed class Backup
+{
+    public Guid Id { get; set; }
+    public required string RelativePath { get; set; }
+    public int SchemaVersion { get; set; }
+    public required string AppVersion { get; set; }
+    public long CreatedUtc { get; set; }
+    public long SizeBytes { get; set; }
+    public required string Sha256 { get; set; }
+    public required string ManifestJson { get; set; }
+    public Guid? LastSaleId { get; set; }
+    public string? LastSaleNumber { get; set; }
+    public long? VerifiedUtc { get; set; }
+    public BackupVerificationState VerificationState { get; set; }
+    public BackupUploadState UploadState { get; set; }
+    public long? RetentionProtectUntilUtc { get; set; }
+}
+
+public sealed class ScheduledJob
+{
+    public ScheduledJobKind Kind { get; set; }
+    public string? LastDueKey { get; set; }
+    public string? LastCompletedKey { get; set; }
+    public long? NextDueUtc { get; set; }
+    public ScheduledJobState State { get; set; }
+    public string? LastError { get; set; }
+    public int Version { get; set; } = 1;
+}
+
+public sealed class RecoveryRun
+{
+    public Guid Id { get; set; }
+    public long StartedUtc { get; set; }
+    public long? FinishedUtc { get; set; }
+    public Guid ActorUserId { get; set; }
+    public Guid? SourceBackupId { get; set; }
+    public required string SourceChecksum { get; set; }
+    public required string PreservedDbPath { get; set; }
+    public required string NumberEvidenceJson { get; set; }
+    public string? ReconciledLastSale { get; set; }
+    public RecoveryDisposition Disposition { get; set; }
+    public required string Notes { get; set; }
+    public Guid NewGenerationId { get; set; }
+}
+
+public sealed class AuditLog
+{
+    public Guid Id { get; set; }
+    public long OccurredUtc { get; set; }
+    public Guid? ActorUserId { get; set; }
+    public required string ActorNameSnapshot { get; set; }
+    public required string Action { get; set; }
+    public required string EntityType { get; set; }
+    public string? EntityId { get; set; }
+    public string? Reason { get; set; }
+    public required string SafeDetailsJson { get; set; }
+    public Guid CorrelationId { get; set; }
+    public Guid? RequestId { get; set; }
+}
