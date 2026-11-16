@@ -173,5 +173,8 @@
         <DataTemplate DataType="{x:Type vm:ProductsViewModel}"><v:ProductsView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:InventoryViewModel}"><v:InventoryView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><v:DashboardView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ReportsViewModel}"><v:ReportsView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ShiftsViewModel}"><v:ShiftsView /></DataTemplate>
     </Application.Resources>
 </Application>

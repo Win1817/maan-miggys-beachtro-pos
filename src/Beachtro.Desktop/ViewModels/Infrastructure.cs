@@ -4,8 +4,10 @@ using Beachtro.Application.Configuration;
 using Beachtro.Application.Ports;
 using Beachtro.Application.Receipts;
 using Beachtro.Application.Recovery;
+using Beachtro.Application.Reports;
 using Beachtro.Application.Sales;
 using Beachtro.Application.Security;
+using Beachtro.Application.Shifts;
 using Beachtro.Desktop.Mvvm;
 using Beachtro.Infrastructure.Runtime;
 
@@ -23,6 +25,8 @@ public sealed record PosServices(
     IReceiptPrinter Printer,
     IBackupService Backups,
     IDemoDataService Demo,
+    IShiftService Shifts,
+    IReportService Reports,
     SessionManager Sessions,
     IClock Clock,
     LocalDataPaths Paths);
@@ -45,6 +49,16 @@ public abstract class PageViewModel(ShellViewModel shell) : ObservableObject
     public bool Busy { get => _busy; set => Set(ref _busy, value); }
 
     public virtual Task LoadAsync() => Task.CompletedTask;
+
+    /// <summary>Today's business date under the calendar profile in effect (falls back to the PC date).</summary>
+    protected async Task<string> TodayAsync()
+    {
+        var now = Services.Clock.UtcNowMilliseconds;
+        var calendar = await Services.Profiles.GetEffectiveCalendarProfileAsync(now);
+        return calendar.IsSuccess
+            ? calendar.Value!.Policy.BusinessDateFor(now)
+            : DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     /// <summary>True on success; otherwise shows a safe message and reacts to locked/ended sessions.</summary>
     protected bool Check<T>(Result<T> result)

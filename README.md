@@ -4,7 +4,7 @@ Native Windows 11 point-of-sale for Ma'an and Miggy's Beachtro.
 
 - Requirements baseline: [BRD v1.2](Maan_and_Miggys_Beachtro_POS_BRD_v1.2.md) (never edited)
 - Design: [design/](design/) — start with [IMPLEMENTATION_READINESS.md](design/IMPLEMENTATION_READINESS.md)
-- Current authorization: [POS-DEC-005](design/POS-DEC-005.md) — milestone 6; earlier: POS-DEC-002 to POS-DEC-004. Test profile only
+- Current authorization: [POS-DEC-006](design/POS-DEC-006.md) — milestone 7; earlier: POS-DEC-002 to POS-DEC-005. Test profile only
 
 ## Build
 
@@ -24,18 +24,20 @@ Package versions are pinned centrally in `Directory.Packages.props`; restores ar
 2. Create the owner account on first launch, then sign in.
 3. Settings → **Load sample data** (needs your password) → Sell.
 4. Optional: Settings → choose **Microsoft Print to PDF** as the receipt printer.
+5. Shifts → open a shift with the drawer's cash; sell; record cash in/out; close with the counted cash.
+6. Dashboard for today's figures; Reports → choose a report and dates → Generate → Export CSV or PDF.
 
 `--data-root <folder>` runs the Test profile against a separate folder (ignored in Production).
 
 ## Status
 
-Milestones 0–6 complete: core (money, database, identity, profiles, catalog, numbering, checkout, corrections, backup/restore) plus the screens: owner setup, sign-in, lock, POS, orders with refunds, products, inventory, settings, and receipt printing. Work stops here pending the next decision (POS-DEC-005).
+Milestones 0–7 complete: core (money, database, identity, profiles, catalog, numbering, checkout, corrections, backup/restore), the screens (owner setup, sign-in, lock, POS, orders with refunds, products, inventory, settings, receipt printing), shifts and cash movements, the dashboard, the seven reports with business-day close, and CSV/PDF export. Work stops here pending the next decision (POS-DEC-006).
 
 | Project | Purpose |
 |---|---|
 | `src/Beachtro.Domain` | Exact money kernel (`Financial/`), persisted vocabularies (`Model/`) |
 | `src/Beachtro.Application` | Ports, typed results, capability matrix/role templates, sessions, service contracts |
-| `src/Beachtro.Infrastructure` | Data paths, lock, EF Core/SQLite schema, migrations, guard triggers, identity, profiles, catalog, numbering journal, checkout, corrections, backup/restore |
+| `src/Beachtro.Infrastructure` | Data paths, lock, EF Core/SQLite schema, migrations, guard triggers, identity, profiles, catalog, numbering journal, checkout, corrections, backup/restore, shifts, reports, CSV/PDF rendering |
 | `src/Beachtro.Desktop` | WPF shell and composition root (Test profile only) |
 | `tests/*` | Domain fixtures/invariants, real-SQLite schema/constraint tests, architecture rules |
 

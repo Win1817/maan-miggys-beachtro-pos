@@ -26,6 +26,9 @@
                     <TextBlock Text="Beachtro POS" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Margin="4,0,20,0" />
                     <Button Content="Sell" Style="{StaticResource Nav}" Command="{Binding ShowPos}" />
                     <Button Content="Orders" Style="{StaticResource Nav}" Command="{Binding ShowOrders}" />
+                    <Button Content="Shifts" Style="{StaticResource Nav}" Command="{Binding ShowShifts}" />
+                    <Button Content="Dashboard" Style="{StaticResource Nav}" Command="{Binding ShowDashboard}" />
+                    <Button Content="Reports" Style="{StaticResource Nav}" Command="{Binding ShowReports}" />
                     <Button Content="Products" Style="{StaticResource Nav}" Command="{Binding ShowProducts}" />
                     <Button Content="Inventory" Style="{StaticResource Nav}" Command="{Binding ShowInventory}" />
                     <Button Content="Settings" Style="{StaticResource Nav}" Command="{Binding ShowSettings}" />

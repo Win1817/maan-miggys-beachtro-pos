@@ -77,6 +77,11 @@ public sealed class CashierShift
     public long? VarianceM { get; set; }
     public Guid? ClosedByUserId { get; set; }
     public string? CloseReason { get; set; }
+
+    /// <summary>Canonical shift-close.v1 equation inputs; set once at close (POS-DEC-006).</summary>
+    public string? CloseSnapshotJson { get; set; }
+
+    public string? CloseSnapshotSha256 { get; set; }
     public int Version { get; set; } = 1;
 }
 

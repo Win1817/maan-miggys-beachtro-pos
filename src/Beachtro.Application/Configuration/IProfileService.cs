@@ -83,5 +83,8 @@ public static class OperationalSettingKeys
     public const string PrinterPaperWidthMm = "printer.paperWidthMm";
     public const string UiTouchMode = "ui.touchMode";
 
-    public static IReadOnlySet<string> All { get; } = new HashSet<string>(StringComparer.Ordinal) { PrinterName, PrinterPaperWidthMm, UiTouchMode };
+    /// <summary>JSON true makes checkout require the cashier's open shift (B-03; default false).</summary>
+    public const string ShiftsRequired = "shifts.required";
+
+    public static IReadOnlySet<string> All { get; } = new HashSet<string>(StringComparer.Ordinal) { PrinterName, PrinterPaperWidthMm, UiTouchMode, ShiftsRequired };
 }

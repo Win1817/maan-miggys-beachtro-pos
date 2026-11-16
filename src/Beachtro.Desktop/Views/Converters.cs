@@ -22,11 +22,11 @@ public sealed class UnitsConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
-/// <summary>UTC Unix milliseconds → local "yyyy-MM-dd HH:mm".</summary>
+/// <summary>UTC Unix milliseconds → local "yyyy-MM-dd HH:mm"; null shows the converter parameter.</summary>
 public sealed class LocalTimeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is long ms ? Formatting.LocalTime(ms) : string.Empty;
+        value is long ms ? Formatting.LocalTime(ms) : parameter as string ?? string.Empty;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }

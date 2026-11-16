@@ -8,7 +8,9 @@ using Beachtro.Domain.Model;
 using Beachtro.Infrastructure.Catalog;
 using Beachtro.Infrastructure.Numbering;
 using Beachtro.Infrastructure.Recovery;
+using Beachtro.Infrastructure.Reports;
 using Beachtro.Infrastructure.Sales;
+using Beachtro.Infrastructure.Shifts;
 using Beachtro.Infrastructure.Tests.Security;
 using static Beachtro.Infrastructure.Tests.Security.SecurityHarness;
 
@@ -33,6 +35,8 @@ public sealed class SalesHarness : IDisposable
     public CheckoutService Checkout { get; private set; } = null!;
     public CorrectionService Corrections { get; private set; } = null!;
     public BackupService Backups { get; private set; } = null!;
+    public ShiftService Shifts { get; private set; } = null!;
+    public ReportService Reports { get; private set; } = null!;
     public UserSession Owner { get; private set; } = null!;
     public Guid CategoryId { get; private set; }
 
@@ -57,6 +61,8 @@ public sealed class SalesHarness : IDisposable
         h.Checkout = new CheckoutService(s.Database.Factory, s.Identity, s.Profiles, h.Numbers, s.Clock, s.Gate);
         h.Corrections = new CorrectionService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
         h.Backups = new BackupService(s.Database.Factory, s.Identity, h.Numbers, s.Clock, s.Gate, s.Database.Paths);
+        h.Shifts = new ShiftService(s.Database.Factory, s.Identity, s.Clock, s.Gate);
+        h.Reports = new ReportService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
 
         h.Owner = await s.BootstrapOwnerAsync();
         var now = s.Clock.UtcNowMilliseconds;

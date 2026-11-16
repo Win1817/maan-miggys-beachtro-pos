@@ -1,0 +1,53 @@
+<UserControl x:Class="Beachtro.Desktop.Views.ReportsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="{StaticResource Page}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="340" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="16">
+                    <TextBlock Text="Reports" Style="{StaticResource Heading}" />
+                    <TextBlock Text="Report" Style="{StaticResource Label}" />
+                    <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" DisplayMemberPath="Name" />
+                    <TextBlock Text="{Binding Selected.Description}" Style="{StaticResource Hint}" Margin="0,4,0,0" />
+                    <TextBlock Text="First business date" Style="{StaticResource Label}" />
+                    <TextBox Text="{Binding StartText, UpdateSourceTrigger=PropertyChanged}" ToolTip="YYYY-MM-DD" />
+                    <TextBlock Text="Last business date" Style="{StaticResource Label}" />
+                    <TextBox Text="{Binding EndText, UpdateSourceTrigger=PropertyChanged}" ToolTip="YYYY-MM-DD" />
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Today" Command="{Binding RangeCommand}" CommandParameter="today" MinHeight="32" Padding="10,4" Margin="0,0,6,6" />
+                        <Button Content="Yesterday" Command="{Binding RangeCommand}" CommandParameter="yesterday" MinHeight="32" Padding="10,4" Margin="0,0,6,6" />
+                        <Button Content="Last 7 days" Command="{Binding RangeCommand}" CommandParameter="week" MinHeight="32" Padding="10,4" Margin="0,0,6,6" />
+                        <Button Content="This month" Command="{Binding RangeCommand}" CommandParameter="month" MinHeight="32" Padding="10,4" Margin="0,0,6,6" />
+                        <Button Content="Last month" Command="{Binding RangeCommand}" CommandParameter="lastmonth" MinHeight="32" Padding="10,4" Margin="0,0,6,6" />
+                    </WrapPanel>
+                    <Button Content="Generate" Style="{StaticResource Primary}" Command="{Binding GenerateCommand}" Margin="0,10,0,0" HorizontalAlignment="Left" IsDefault="True" />
+                    <Border Style="{StaticResource ErrorBox}" Visibility="{Binding Error, Converter={StaticResource Visible}}">
+                        <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" />
+                    </Border>
+                    <Border Style="{StaticResource InfoBox}" Visibility="{Binding Info, Converter={StaticResource Visible}}">
+                        <TextBlock Text="{Binding Info}" TextWrapping="Wrap" />
+                    </Border>
+                    <StackPanel Visibility="{Binding Run, Converter={StaticResource Visible}}" Margin="0,16,0,0">
+                        <TextBlock Text="{Binding RunSummary}" Style="{StaticResource Hint}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="Export CSV" Command="{Binding ExportCsvCommand}" />
+                            <Button Content="Export PDF" Command="{Binding ExportPdfCommand}" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                   Text="Exports are made from this stored report, so CSV, PDF and the preview always show the same figures." />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+        <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Margin="16">
+            <Border BorderBrush="{StaticResource Line}" BorderThickness="1" Background="{StaticResource Surface}" Padding="16"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="{Binding Run, Converter={StaticResource Visible}}">
+                <TextBlock Text="{Binding Preview}" FontFamily="Consolas" FontSize="12" />
+            </Border>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

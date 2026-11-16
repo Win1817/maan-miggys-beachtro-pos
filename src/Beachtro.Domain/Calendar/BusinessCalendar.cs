@@ -43,6 +43,35 @@ public sealed record CalendarPolicy
         return DateOnly.FromDateTime(local.AddMinutes(-CutoffMinute).DateTime).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// First UTC instant of a business date: local midnight plus the cutoff. The business date of
+    /// that instant is the given date; one millisecond earlier belongs to the previous date.
+    /// </summary>
+    public long StartUtcOf(string businessDate)
+    {
+        if (!TryParseDate(businessDate, out var date))
+        {
+            throw new FormatException($"'{businessDate}' is not a YYYY-MM-DD date.");
+        }
+
+        var local = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified).AddMinutes(CutoffMinute);
+
+        // A start inside a daylight-saving gap moves to the first valid local minute.
+        for (var guard = 0; TimeZone.IsInvalidTime(local) && guard < 24 * 60; guard++)
+        {
+            local = local.AddMinutes(1);
+        }
+
+        return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, TimeZone), TimeSpan.Zero).ToUnixTimeMilliseconds();
+    }
+
+    /// <summary>Local wall time in the policy zone, "yyyy-MM-dd HH:mm", for reports.</summary>
+    public string LocalTimeText(long utcMilliseconds) =>
+        TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(utcMilliseconds), TimeZone).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    public static bool TryParseDate(string? text, out DateOnly date) =>
+        DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+
     public static bool IsKnownTimeZone(string timeZoneId)
     {
         try

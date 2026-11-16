@@ -420,6 +420,12 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
                     b.Property<string>("CloseReason")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CloseSnapshotJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CloseSnapshotSha256")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ClosedByUserId")
                         .HasColumnType("TEXT");
 

@@ -29,6 +29,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<Application.Sales.IOrderQueryService, Sales.OrderQueryService>();
         services.AddSingleton<Application.Receipts.IPrintService, Receipts.PrintService>();
         services.AddSingleton<Application.Configuration.IDemoDataService, Configuration.DemoDataService>();
+        services.AddSingleton<Application.Shifts.IShiftService, Shifts.ShiftService>();
+        services.AddSingleton<Application.Reports.IReportService, Reports.ReportService>();
         return services;
     }
 }

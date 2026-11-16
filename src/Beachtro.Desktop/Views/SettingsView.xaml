@@ -31,6 +31,16 @@
                 </StackPanel>
             </Border>
 
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanConfigurePrinter, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="Shifts" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="Off by default. Turn on only once the business has agreed how cashiers open, count and close the drawer." />
+                    <CheckBox Content="Require an open shift before selling" IsChecked="{Binding RequireShift}" />
+                    <Button Content="Save" Command="{Binding SaveShiftPolicyCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+
             <Border Style="{StaticResource Card}" Margin="0,0,0,12" Background="#FFFBEB" BorderBrush="#FCD34D"
                     Visibility="{Binding CanLoadSample, Converter={StaticResource Visible}}">
                 <StackPanel>

@@ -18,6 +18,7 @@ public sealed class SettingsViewModel : PageViewModel
     private PrintJobStatus? _testJob;
     private string _profileSummary = string.Empty;
     private string _testPreview = string.Empty;
+    private bool _requireShift;
 
     public SettingsViewModel(ShellViewModel shell)
         : base(shell)
@@ -27,6 +28,7 @@ public sealed class SettingsViewModel : PageViewModel
         ConfirmTestCommand = Command(p => ConfirmAsync(p is true or "True"), _ => _testJob is { State: PrintJobState.SpoolAccepted });
         LoadSampleCommand = Command(LoadSampleAsync);
         BackupCommand = Command(_ => BackupAsync());
+        SaveShiftPolicyCommand = Command(_ => SaveShiftPolicyAsync());
     }
 
     public override string Title => "Settings";
@@ -46,6 +48,10 @@ public sealed class SettingsViewModel : PageViewModel
     public ICommand ConfirmTestCommand { get; }
     public ICommand LoadSampleCommand { get; }
     public ICommand BackupCommand { get; }
+    public ICommand SaveShiftPolicyCommand { get; }
+
+    /// <summary>B-03: off by default until the business confirms its shift procedure (D-08).</summary>
+    public bool RequireShift { get => _requireShift; set => Set(ref _requireShift, value); }
 
     public override async Task LoadAsync()
     {
@@ -56,6 +62,7 @@ public sealed class SettingsViewModel : PageViewModel
         }
 
         SelectedPrinter ??= Printers.FirstOrDefault(p => p.Contains("PDF", StringComparison.OrdinalIgnoreCase)) ?? Printers.FirstOrDefault();
+        RequireShift = await Services.Shifts.IsShiftRequiredAsync();
         await RefreshProfilesAsync();
     }
 
@@ -129,6 +136,14 @@ public sealed class SettingsViewModel : PageViewModel
             Info = $"Sample data loaded: {result.Value!.ProfilesCreated} profile(s), {result.Value.ProductsCreated} product(s). All marked TEST.";
             await RefreshProfilesAsync();
             await Shell.EnterMainAsync();
+        }
+    }
+
+    private async Task SaveShiftPolicyAsync()
+    {
+        if (Check(await Services.Profiles.SetOperationalSettingAsync(Session, OperationalSettingKeys.ShiftsRequired, RequireShift ? "true" : "false")))
+        {
+            Info = RequireShift ? "Cashiers must now open a shift before selling." : "Shifts are optional again; selling does not need an open shift.";
         }
     }
 

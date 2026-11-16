@@ -34,4 +34,23 @@ public sealed class BusinessCalendarTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new CalendarPolicy("Asia/Manila", 1440));
         Assert.Throws<ArgumentOutOfRangeException>(() => new CalendarPolicy("Asia/Manila", -1));
     }
+
+    [Theory]
+    [InlineData(0, "2026-11-16", "2026-11-15T16:00:00Z")]
+    [InlineData(240, "2026-11-16", "2026-11-15T20:00:00Z")]
+    public void Start_of_business_date_is_local_midnight_plus_cutoff(int cutoff, string date, string expectedUtc)
+    {
+        var policy = new CalendarPolicy("Asia/Manila", cutoff);
+        var start = policy.StartUtcOf(date);
+        Assert.Equal(Utc(expectedUtc), start);
+        Assert.Equal(date, policy.BusinessDateFor(start));
+        Assert.NotEqual(date, policy.BusinessDateFor(start - 1));
+    }
+
+    [Fact]
+    public void Local_time_text_uses_the_policy_zone_not_the_pc()
+    {
+        Assert.Equal("2026-11-17 00:05", CalendarPolicy.ManilaMidnight.LocalTimeText(Utc("2026-11-16T16:05:00Z")));
+        Assert.Throws<FormatException>(() => CalendarPolicy.ManilaMidnight.StartUtcOf("16/11/2026"));
+    }
 }

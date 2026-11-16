@@ -26,6 +26,9 @@ public sealed class ShellViewModel : ObservableObject
         Services = services;
         ShowPos = new RelayCommand(_ => Navigate(new PosViewModel(this)), _ => Can(Capabilities.PosSell));
         ShowOrders = new RelayCommand(_ => Navigate(new OrdersViewModel(this)), _ => Can(Capabilities.OrdersViewOwn) || Can(Capabilities.OrdersViewAll));
+        ShowShifts = new RelayCommand(_ => Navigate(new ShiftsViewModel(this)), _ => Can(Capabilities.ShiftsOwn) || Can(Capabilities.ShiftsManage));
+        ShowDashboard = new RelayCommand(_ => Navigate(new DashboardViewModel(this)), _ => Can(Capabilities.ReportsViewExport));
+        ShowReports = new RelayCommand(_ => Navigate(new ReportsViewModel(this)), _ => Can(Capabilities.ReportsViewExport));
         ShowProducts = new RelayCommand(_ => Navigate(new ProductsViewModel(this)), _ => Can(Capabilities.ProductsManage));
         ShowInventory = new RelayCommand(_ => Navigate(new InventoryViewModel(this)), _ => Can(Capabilities.InventoryAdjust));
         ShowSettings = new RelayCommand(_ => Navigate(new SettingsViewModel(this)),
@@ -72,6 +75,9 @@ public sealed class ShellViewModel : ObservableObject
 
     public ICommand ShowPos { get; }
     public ICommand ShowOrders { get; }
+    public ICommand ShowShifts { get; }
+    public ICommand ShowDashboard { get; }
+    public ICommand ShowReports { get; }
     public ICommand ShowProducts { get; }
     public ICommand ShowInventory { get; }
     public ICommand ShowSettings { get; }
@@ -117,6 +123,10 @@ public sealed class ShellViewModel : ObservableObject
         if (session.Has(Capabilities.PosSell))
         {
             Navigate(new PosViewModel(this));
+        }
+        else if (session.Has(Capabilities.ReportsViewExport))
+        {
+            Navigate(new DashboardViewModel(this));
         }
         else if (session.Has(Capabilities.OrdersViewAll))
         {

@@ -67,6 +67,12 @@ public sealed class CheckoutService(
             return blocked.As<CheckoutQuote>();
         }
 
+        var noShift = await Shifts.ShiftService.RequireShiftIfConfiguredAsync(db, session.UserId, cancellationToken).ConfigureAwait(false);
+        if (noShift is not null)
+        {
+            return noShift.As<CheckoutQuote>();
+        }
+
         var now = clock.UtcNowMilliseconds;
         var priced = await SalePricing.PriceAsync(db, profiles, cart, now, cancellationToken).ConfigureAwait(false);
         if (!priced.IsSuccess)
@@ -152,6 +158,12 @@ public sealed class CheckoutService(
         if (blocked is not null)
         {
             return blocked.As<SaleReceipt>();
+        }
+
+        var noShift = await Shifts.ShiftService.RequireShiftIfConfiguredAsync(db, session.UserId, cancellationToken).ConfigureAwait(false);
+        if (noShift is not null)
+        {
+            return noShift.As<SaleReceipt>();
         }
 
         var (cart, frozenHash, _) = SalePricing.ReadRequestJson(request.QuoteJson);
