@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Beachtro.Application/Beachtro.Application.csproj" />
+    <Project Path="src/Beachtro.Desktop/Beachtro.Desktop.csproj" />
+    <Project Path="src/Beachtro.Domain/Beachtro.Domain.csproj" />
+    <Project Path="src/Beachtro.Infrastructure/Beachtro.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Beachtro.Architecture.Tests/Beachtro.Architecture.Tests.csproj" />
+    <Project Path="tests/Beachtro.Domain.Tests/Beachtro.Domain.Tests.csproj" />
+    <Project Path="tests/Beachtro.Infrastructure.Tests/Beachtro.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

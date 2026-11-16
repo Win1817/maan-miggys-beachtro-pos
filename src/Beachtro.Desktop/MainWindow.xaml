@@ -1,0 +1,16 @@
+﻿<Window x:Class="Beachtro.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Beachtro POS" Height="600" Width="960" WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <Border x:Name="ProfileBanner" DockPanel.Dock="Top" Background="#B45309" Padding="12,8">
+            <TextBlock x:Name="ProfileBannerText" Foreground="White" FontWeight="SemiBold" FontSize="16" />
+        </Border>
+        <StackPanel Margin="24" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="Beachtro POS" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Text="Application shell — features arrive in later milestones." Margin="0,8,0,0"
+                       HorizontalAlignment="Center" Foreground="#555" />
+            <TextBlock x:Name="DataRootText" Margin="0,16,0,0" HorizontalAlignment="Center" Foreground="#555" />
+        </StackPanel>
+    </DockPanel>
+</Window>

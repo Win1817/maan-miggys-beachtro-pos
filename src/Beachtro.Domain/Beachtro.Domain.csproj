@@ -1,0 +1,7 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pure domain: value objects and calculation/state rules. No package or project references (T-19). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Beachtro.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>

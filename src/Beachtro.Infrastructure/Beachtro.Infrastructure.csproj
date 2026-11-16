@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <!-- SQLite/EF Core, file system and Windows adapters. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Beachtro.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Beachtro.Application\Beachtro.Application.csproj" />
+    <ProjectReference Include="..\Beachtro.Domain\Beachtro.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Beachtro.Infrastructure.Tests" />
+  </ItemGroup>
+</Project>
