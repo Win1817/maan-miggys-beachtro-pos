@@ -30,7 +30,6 @@ Milestones 0–5 complete: setup, skeleton, money kernel, database, identity/aut
 | `src/Beachtro.Desktop` | WPF shell and composition root (Test profile only) |
 | `tests/*` | Domain fixtures/invariants, real-SQLite schema/constraint tests, architecture rules |
 
-Data lives in `%LocalAppData%\BeachtroPOS-Test\` (`data
-umbers.journal` is the number reservation journal: never delete or edit it). New migration: `dotnet ef migrations add <Name> --project src/Beachtro.Infrastructure --output-dir Persistence/Migrations --namespace Beachtro.Infrastructure.Persistence.Migrations`, then move `PosDbContextModelSnapshot.cs` back into `Persistence/Migrations/` if EF places it elsewhere.
+Data lives in `%LocalAppData%\BeachtroPOS-Test\` (`data\numbers.journal` is the number reservation journal: never delete or edit it). New migration: `dotnet ef migrations add <Name> --project src/Beachtro.Infrastructure --output-dir Persistence/Migrations --namespace Beachtro.Infrastructure.Persistence.Migrations`, then move `PosDbContextModelSnapshot.cs` back into `Persistence/Migrations/` if EF places it elsewhere.
 
 **Not production software.** It runs only in the Test profile with synthetic data. No real tax, receipt, printer or Google Drive configuration exists.
