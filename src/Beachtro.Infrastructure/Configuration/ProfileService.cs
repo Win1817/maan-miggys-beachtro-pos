@@ -29,6 +29,9 @@ public sealed class ProfileService(
     public const int MaxTaxKeyLength = 64;
     public const int MaxSettingJsonLength = 2000;
 
+    /// <summary>A start time up to this far in the past is treated as "now" (clock read by the caller).</summary>
+    public const long EffectiveNowToleranceMs = 60_000;
+
     public async Task<Result<Guid>> CreateCalculationProfileAsync(UserSession session, CalculationProfileDraft draft, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(draft);
@@ -408,7 +411,8 @@ public sealed class ProfileService(
             return "Unknown approval state.";
         }
 
-        if (effectiveFromUtc < clock.UtcNowMilliseconds)
+        // "Effective now" computed a moment earlier by the caller is fine; anything older is backdating.
+        if (effectiveFromUtc < clock.UtcNowMilliseconds - EffectiveNowToleranceMs)
         {
             return "Profile changes are prospective only; the start time cannot be in the past.";
         }

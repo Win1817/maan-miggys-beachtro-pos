@@ -293,6 +293,27 @@ public sealed class CatalogService(
         return Result<long>.Ok(after);
     }
 
+    public async Task<Result<IReadOnlyList<CategoryView>>> ListCategoriesAsync(UserSession session, bool includeInactive, CancellationToken cancellationToken = default)
+    {
+        var auth = await identity.AuthorizeAsync(session, Capabilities.PosSell, false, cancellationToken).ConfigureAwait(false);
+        if (!auth.IsSuccess)
+        {
+            auth = await identity.AuthorizeAsync(session, Capabilities.ProductsManage, false, cancellationToken).ConfigureAwait(false);
+            if (!auth.IsSuccess)
+            {
+                return auth.As<IReadOnlyList<CategoryView>>();
+            }
+        }
+
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<CategoryView> rows = await db.Categories.AsNoTracking()
+            .Where(c => includeInactive || c.IsActive)
+            .OrderBy(c => c.Name)
+            .Select(c => new CategoryView(c.Id, c.Name, c.Description, c.IsActive, c.Version))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        return Result<IReadOnlyList<CategoryView>>.Ok(rows);
+    }
+
     public async Task<Result<IReadOnlyList<ProductView>>> SearchProductsAsync(UserSession session, string? text, bool includeInactive, CancellationToken cancellationToken = default)
     {
         var auth = await identity.AuthorizeAsync(session, Capabilities.PosSell, false, cancellationToken).ConfigureAwait(false);

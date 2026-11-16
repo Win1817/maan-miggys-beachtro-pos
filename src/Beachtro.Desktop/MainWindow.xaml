@@ -1,16 +1,37 @@
 ﻿<Window x:Class="Beachtro.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Beachtro POS" Height="600" Width="960" WindowStartupLocation="CenterScreen">
+        Title="Beachtro POS" Height="800" Width="1280" MinHeight="640" MinWidth="1024"
+        WindowStartupLocation="CenterScreen" Background="{StaticResource Page}">
+    <Window.InputBindings>
+        <KeyBinding Key="L" Modifiers="Control" Command="{Binding LockCommand}" />
+    </Window.InputBindings>
     <DockPanel>
-        <Border x:Name="ProfileBanner" DockPanel.Dock="Top" Background="#B45309" Padding="12,8">
-            <TextBlock x:Name="ProfileBannerText" Foreground="White" FontWeight="SemiBold" FontSize="16" />
+        <Border DockPanel.Dock="Top" Background="{StaticResource Banner}" Padding="12,6"
+                Visibility="{Binding IsTestProfile, Converter={StaticResource Visible}}">
+            <TextBlock Text="{Binding BannerText}" Foreground="White" FontWeight="SemiBold" FontSize="14" />
         </Border>
-        <StackPanel Margin="24" VerticalAlignment="Center" HorizontalAlignment="Center">
-            <TextBlock Text="Beachtro POS" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" />
-            <TextBlock Text="Application shell — features arrive in later milestones." Margin="0,8,0,0"
-                       HorizontalAlignment="Center" Foreground="#555" />
-            <TextBlock x:Name="DataRootText" Margin="0,16,0,0" HorizontalAlignment="Center" Foreground="#555" />
-        </StackPanel>
+        <Border DockPanel.Dock="Top" Background="{StaticResource Accent}" Padding="12,6"
+                Visibility="{Binding ShowNavigation, Converter={StaticResource Visible}}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding OperatorName}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding BusinessDate}" Foreground="#CCFBF1" FontSize="12" HorizontalAlignment="Right" />
+                    </StackPanel>
+                    <Button Content="Lock (Ctrl+L)" Style="{StaticResource Nav}" Command="{Binding LockCommand}" />
+                    <Button Content="Sign out" Style="{StaticResource Nav}" Command="{Binding SignOutCommand}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Beachtro POS" Foreground="White" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Margin="4,0,20,0" />
+                    <Button Content="Sell" Style="{StaticResource Nav}" Command="{Binding ShowPos}" />
+                    <Button Content="Orders" Style="{StaticResource Nav}" Command="{Binding ShowOrders}" />
+                    <Button Content="Products" Style="{StaticResource Nav}" Command="{Binding ShowProducts}" />
+                    <Button Content="Inventory" Style="{StaticResource Nav}" Command="{Binding ShowInventory}" />
+                    <Button Content="Settings" Style="{StaticResource Nav}" Command="{Binding ShowSettings}" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <ContentControl Content="{Binding CurrentPage}" Focusable="False" />
     </DockPanel>
 </Window>

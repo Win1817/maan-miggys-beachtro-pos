@@ -36,7 +36,11 @@ public partial class App
             return;
         }
 
-        var paths = LocalDataPaths.ForProfile(profile);
+        // "--data-root <folder>" points a Test installation at another folder (testing and demos). Never honoured in Production.
+        var rootIndex = Array.FindIndex(e.Args, a => string.Equals(a, "--data-root", StringComparison.OrdinalIgnoreCase));
+        var paths = profile == RuntimeProfile.Test && rootIndex >= 0 && rootIndex + 1 < e.Args.Length
+            ? new LocalDataPaths(e.Args[rootIndex + 1], profile)
+            : LocalDataPaths.ForProfile(profile);
         paths.EnsureCreated();
 
         _instanceLock = SingleInstanceLock.TryAcquire(paths);
@@ -66,6 +70,9 @@ public partial class App
         });
         builder.Services.AddSerilog();
         builder.Services.AddBeachtroInfrastructure(paths);
+        builder.Services.AddSingleton<Beachtro.Application.Receipts.IReceiptPrinter, Printing.WindowsReceiptPrinter>();
+        builder.Services.AddSingleton<ViewModels.PosServices>();
+        builder.Services.AddSingleton<ViewModels.ShellViewModel>();
         builder.Services.AddSingleton<MainWindow>();
 
         _host = builder.Build();
@@ -82,6 +89,11 @@ public partial class App
             var numbers = _host.Services.GetRequiredService<Beachtro.Application.Recovery.INumberSeriesService>()
                 .ReconcileAsync().GetAwaiter().GetResult();
             Log.Information("Number series reconciled: {Blocked} on hold, journal repaired: {Repaired}", numbers.Blocked.Count, numbers.JournalRepaired);
+
+            // Receipts left mid-submission by a crash become OutcomeUnknown; they are never resent silently.
+            var interrupted = _host.Services.GetRequiredService<Beachtro.Application.Receipts.IPrintService>()
+                .RecoverInterruptedAsync().GetAwaiter().GetResult();
+            Log.Information("Print jobs needing operator check after restart: {Count}", interrupted);
         }
         catch (Exception ex) when (ex is DatabaseNotReadyException or Microsoft.Data.Sqlite.SqliteException or IOException)
         {

@@ -41,6 +41,8 @@ public sealed record ProductView(
     int Version,
     long OnHandQ);
 
+public sealed record CategoryView(Guid Id, string Name, string? Description, bool IsActive, int Version);
+
 public sealed record StockMovementView(Guid Id, string Type, long DeltaQ, long BalanceAfterQ, string? Reason, Guid ActorUserId, long CreatedUtc);
 
 /// <summary>Catalog and finished-product stock (FR-004–008; IB-07).</summary>
@@ -52,6 +54,8 @@ public interface ICatalogService
 
     /// <summary>Returns the balance after the change. Repeating a RequestId returns the original result.</summary>
     Task<Result<long>> AdjustStockAsync(UserSession session, StockAdjustmentInput input, CancellationToken cancellationToken = default);
+
+    Task<Result<IReadOnlyList<CategoryView>>> ListCategoriesAsync(UserSession session, bool includeInactive, CancellationToken cancellationToken = default);
 
     Task<Result<IReadOnlyList<ProductView>>> SearchProductsAsync(UserSession session, string? text, bool includeInactive, CancellationToken cancellationToken = default);
 

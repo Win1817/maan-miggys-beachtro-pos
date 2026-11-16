@@ -62,11 +62,21 @@ public sealed class ProfileTests : IDisposable
     public async Task Backdated_and_overlapping_revisions_are_rejected()
     {
         var owner = await _h.BootstrapOwnerAsync();
-        Assert.Equal(ResultStatus.Validation, (await _h.Profiles.CreateCalculationProfileAsync(owner, TestCalc(Now - 1))).Status);
+        Assert.Equal(ResultStatus.Validation, (await _h.Profiles.CreateCalculationProfileAsync(owner, TestCalc(Now - 60_001))).Status);
 
         Ok(await _h.Profiles.CreateCalculationProfileAsync(owner, TestCalc(Now + 10_000)));
         Assert.Equal(ResultStatus.Conflict, (await _h.Profiles.CreateCalculationProfileAsync(owner, TestCalc(Now + 10_000))).Status);
         Assert.Equal(ResultStatus.Conflict, (await _h.Profiles.CreateCalculationProfileAsync(owner, TestCalc(Now + 5_000))).Status);
+    }
+
+    [Fact]
+    public async Task A_start_read_from_the_clock_a_moment_earlier_counts_as_now()
+    {
+        var owner = await _h.BootstrapOwnerAsync();
+        var start = Now;
+        _h.Clock.Advance(TimeSpan.FromMilliseconds(250)); // real clocks move between the caller's read and validation
+        Ok(await _h.Profiles.CreateCalculationProfileAsync(owner, TestCalc(start)));
+        Assert.True((await _h.Profiles.GetEffectiveCalculationProfileAsync(Now)).IsSuccess);
     }
 
     [Fact]

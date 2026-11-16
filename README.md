@@ -4,7 +4,7 @@ Native Windows 11 point-of-sale for Ma'an and Miggy's Beachtro.
 
 - Requirements baseline: [BRD v1.2](Maan_and_Miggys_Beachtro_POS_BRD_v1.2.md) (never edited)
 - Design: [design/](design/) — start with [IMPLEMENTATION_READINESS.md](design/IMPLEMENTATION_READINESS.md)
-- Current authorization: [POS-DEC-004](design/POS-DEC-004.md) — milestone 5; earlier: [POS-DEC-003](design/POS-DEC-003.md), [POS-DEC-002](design/POS-DEC-002.md). Test profile only
+- Current authorization: [POS-DEC-005](design/POS-DEC-005.md) — milestone 6; earlier: POS-DEC-002 to POS-DEC-004. Test profile only
 
 ## Build
 
@@ -18,9 +18,18 @@ dotnet test
 
 Package versions are pinned centrally in `Directory.Packages.props`; restores are locked by `packages.lock.json`.
 
+## Try it
+
+1. `dotnet run --project src/Beachtro.Desktop` (Test profile; data in `%LocalAppData%\BeachtroPOS-Test`).
+2. Create the owner account on first launch, then sign in.
+3. Settings → **Load sample data** (needs your password) → Sell.
+4. Optional: Settings → choose **Microsoft Print to PDF** as the receipt printer.
+
+`--data-root <folder>` runs the Test profile against a separate folder (ignored in Production).
+
 ## Status
 
-Milestones 0–5 complete: setup, skeleton, money kernel, database, identity/authorization/audit, versioned settings profiles, catalog/stock, transaction numbering with an external journal, checkout, refunds/voids and backup/restore core. Work stops here pending the next decision (POS-DEC-004). There are no screens yet beyond the shell; they arrive with milestone 7.
+Milestones 0–6 complete: core (money, database, identity, profiles, catalog, numbering, checkout, corrections, backup/restore) plus the screens: owner setup, sign-in, lock, POS, orders with refunds, products, inventory, settings, and receipt printing. Work stops here pending the next decision (POS-DEC-005).
 
 | Project | Purpose |
 |---|---|

@@ -1,25 +1,20 @@
-﻿using Beachtro.Application.Runtime;
-using Beachtro.Infrastructure.Runtime;
+﻿using Beachtro.Desktop.ViewModels;
 
 namespace Beachtro.Desktop;
 
 public partial class MainWindow
 {
-    public MainWindow(LocalDataPaths paths)
+    public MainWindow(ShellViewModel shell)
     {
-        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(shell);
         InitializeComponent();
+        DataContext = shell;
+        Title = shell.IsTestProfile ? "Beachtro POS [TEST]" : "Beachtro POS";
 
-        if (paths.Profile == RuntimeProfile.Test)
-        {
-            ProfileBannerText.Text = "TEST PROFILE — synthetic data only — NOT FOR REAL SALES — NOT A TAX INVOICE SYSTEM";
-            Title = "Beachtro POS [TEST]";
-        }
-        else
-        {
-            ProfileBanner.Visibility = System.Windows.Visibility.Collapsed;
-        }
-
-        DataRootText.Text = $"Data folder: {paths.Root}";
+        // Any keyboard or pointer input counts as activity for the inactivity lock.
+        PreviewKeyDown += (_, _) => shell.RecordActivity();
+        PreviewMouseDown += (_, _) => shell.RecordActivity();
+        PreviewTouchDown += (_, _) => shell.RecordActivity();
+        Loaded += async (_, _) => await shell.StartAsync();
     }
 }

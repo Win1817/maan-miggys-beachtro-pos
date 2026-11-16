@@ -1,0 +1,70 @@
+<UserControl x:Class="Beachtro.Desktop.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer Background="{StaticResource Page}" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" MaxWidth="900" HorizontalAlignment="Left">
+            <TextBlock Text="Settings" Style="{StaticResource Heading}" />
+            <Border Style="{StaticResource ErrorBox}" Visibility="{Binding Error, Converter={StaticResource Visible}}" Margin="0,0,0,8">
+                <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" />
+            </Border>
+            <Border Style="{StaticResource InfoBox}" Visibility="{Binding Info, Converter={StaticResource Visible}}" Margin="0,0,0,8">
+                <TextBlock Text="{Binding Info}" TextWrapping="Wrap" />
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanConfigurePrinter, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="Receipt printer" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Choose an installed Windows printer. For testing, use Microsoft Print to PDF (Windows asks where to save each receipt)." />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" Width="360" Margin="0,0,8,0" />
+                        <Button Content="Save" Command="{Binding SavePrinterCommand}" />
+                        <Button Content="Print test page" Command="{Binding TestPrintCommand}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Test page printed OK" Command="{Binding ConfirmTestCommand}" CommandParameter="True" MinHeight="34" Padding="10,4" />
+                        <Button Content="It did not print" Command="{Binding ConfirmTestCommand}" CommandParameter="False" MinHeight="34" Padding="10,4" />
+                    </StackPanel>
+                    <Border BorderBrush="{StaticResource Line}" BorderThickness="1" Background="#FAFAF9" Padding="12" Margin="0,10,0,0" HorizontalAlignment="Left"
+                            Visibility="{Binding TestPreview, Converter={StaticResource Visible}}">
+                        <TextBlock Text="{Binding TestPreview}" FontFamily="Consolas" FontSize="12" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Background="#FFFBEB" BorderBrush="#FCD34D"
+                    Visibility="{Binding CanLoadSample, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="Sample data (Test profile only)" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="Loads Test tax and calendar profiles, a TEST business name and six sample products with stock, so you can try selling. Nothing here is real business, tax or price data. Safe to run again." />
+                    <TextBlock Text="Confirm with your password" Style="{StaticResource Label}" />
+                    <StackPanel Orientation="Horizontal">
+                        <PasswordBox x:Name="SamplePassword" Width="260" Margin="0,0,8,0" />
+                        <Button Content="Load sample data" Command="{Binding LoadSampleCommand}" CommandParameter="{Binding ElementName=SamplePassword}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanBackup, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="Backup" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Creates a verified copy of the database and number journal in the local backups folder." />
+                    <Button Content="Back up now" Command="{Binding BackupCommand}" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Profiles in effect" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Text="{Binding ProfileSummary}" TextWrapping="Wrap" />
+                    <TextBlock Text="Why Production cannot be activated yet" Style="{StaticResource Subheading}" />
+                    <ItemsControl ItemsSource="{Binding Blockers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
