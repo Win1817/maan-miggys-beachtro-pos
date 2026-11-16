@@ -1,0 +1,23 @@
+# Build output
+bin/
+obj/
+artifacts/
+TestResults/
+*.binlog
+
+# IDE / user state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# Local databases, logs and secrets must never be committed
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.log
+secrets/
+appsettings.*.local.json
