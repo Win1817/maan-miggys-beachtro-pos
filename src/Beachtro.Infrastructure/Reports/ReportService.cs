@@ -125,22 +125,8 @@ public sealed class ReportService(
 
         using var gate = await writeGate.EnterAsync(cancellationToken).ConfigureAwait(false);
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        var key = $"report/{run.Id:D}/{format.ToString().ToLowerInvariant()}";
         var now = clock.UtcNowMilliseconds;
-        if (!await db.ArtifactRecords.AnyAsync(a => a.LogicalKey == key, cancellationToken).ConfigureAwait(false))
-        {
-            db.ArtifactRecords.Add(new ArtifactRecord
-            {
-                Id = Guid.NewGuid(),
-                LogicalKey = key,
-                Type = format == ReportFormat.Csv ? ArtifactType.ReportCsv : ArtifactType.ReportPdf,
-                SourceId = run.Id,
-                ReportRunId = run.Id,
-                PayloadSchemaVersion = 1,
-                State = ArtifactState.Intent,
-                CreatedUtc = now,
-            });
-        }
+        await AddIntentAsync(db, run.Id, format, now, cancellationToken).ConfigureAwait(false);
 
         AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Reports.Exported", "ReportRun", run.Id.ToString(), null,
             new { format = format.ToString(), file.FileName, bytes = file.Content.Length });
@@ -174,6 +160,9 @@ public sealed class ReportService(
         }
 
         var v = run.Value!;
+
+        // The close's stored CSV and PDF are written and queued in the background (IB-23 daily report).
+        await QueueRunFilesAsync(v.RunId, businessDate, cancellationToken).ConfigureAwait(false);
         return Result<BusinessCloseView>.Ok(new BusinessCloseView(businessDate, v.Revision, v.GeneratedUtc, v.GeneratedByName, ChangedSinceClose: false));
     }
 
@@ -195,6 +184,41 @@ public sealed class ReportService(
         return Result<BusinessCloseView?>.Ok(await CloseStatusAsync(db, businessDate, facts, cancellationToken).ConfigureAwait(false));
     }
 
+    /// <summary>Records CSV and PDF artifact intents for a stored run; the materializer writes the files later.</summary>
+    internal async Task QueueRunFilesAsync(Guid runId, string? closedBusinessDate, CancellationToken cancellationToken)
+    {
+        using var gate = await writeGate.EnterAsync(cancellationToken).ConfigureAwait(false);
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var now = clock.UtcNowMilliseconds;
+        await AddIntentAsync(db, runId, ReportFormat.Csv, now, cancellationToken).ConfigureAwait(false);
+        await AddIntentAsync(db, runId, ReportFormat.Pdf, now, cancellationToken).ConfigureAwait(false);
+        if (closedBusinessDate is not null)
+        {
+            await Sync.JobScheduler.RecordDailyCloseAsync(db, closedBusinessDate, cancellationToken).ConfigureAwait(false);
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task AddIntentAsync(PosDbContext db, Guid runId, ReportFormat format, long now, CancellationToken cancellationToken)
+    {
+        var key = $"report/{runId:D}/{format.ToString().ToLowerInvariant()}";
+        if (!await db.ArtifactRecords.AnyAsync(a => a.LogicalKey == key, cancellationToken).ConfigureAwait(false))
+        {
+            db.ArtifactRecords.Add(new ArtifactRecord
+            {
+                Id = Guid.NewGuid(),
+                LogicalKey = key,
+                Type = format == ReportFormat.Csv ? ArtifactType.ReportCsv : ArtifactType.ReportPdf,
+                SourceId = runId,
+                ReportRunId = runId,
+                PayloadSchemaVersion = 1,
+                State = ArtifactState.Intent,
+                CreatedUtc = now,
+            });
+        }
+    }
+
     // ---------------------------------------------------------------- rendering
 
     public static ReportFile Render(ReportRun run, ReportFormat format)
@@ -203,9 +227,15 @@ public sealed class ReportService(
         var document = ReportJson.Read(run.SnapshotJson);
         var header = Header(run, document);
         var bytes = format == ReportFormat.Csv ? ReportCsv.Render(document, header) : ReportPdf.Render(document, header);
-        var name = $"{Slug(document.Type)}_{document.StartDate}_to_{ReportBuilder.LastDate(document.EndExclusiveDate)}_r{run.Revision}_{run.SnapshotSha256[..8]}"
-            + (format == ReportFormat.Csv ? ".csv" : ".pdf");
+        var name = FileStem(run) + (format == ReportFormat.Csv ? ".csv" : ".pdf");
         return new ReportFile(name, bytes);
+    }
+
+    /// <summary>Human file name without extension: type, range, revision and snapshot hash prefix.</summary>
+    public static string FileStem(ReportRun run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return $"{Slug(run.Type)}_{run.RangeStartDate}_to_{ReportBuilder.LastDate(run.RangeEndExclusiveDate)}_r{run.Revision}_{run.SnapshotSha256[..8]}";
     }
 
     public static ReportRunHeader Header(ReportRun run, ReportDocument document)

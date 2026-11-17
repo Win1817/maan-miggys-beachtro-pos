@@ -14,7 +14,7 @@ public sealed class SchemaTests
         "Inventory", "InventoryMovements", "CashierShifts", "CashMovements", "Discounts", "Drafts", "CheckoutRequests",
         "NumberSeries", "Orders", "OrderItems", "ItemTaxComponents", "Payments", "CorrectionRequests", "Corrections",
         "CorrectionItems", "CorrectionTaxComponents", "RefundPayments", "PrintJobs", "ReportRuns", "ArtifactRecords",
-        "SyncQueue", "SyncHistory", "Backups", "ScheduledJobs", "RecoveryRuns", "AuditLogs",
+        "ArtifactHolds", "SyncQueue", "SyncHistory", "Backups", "ScheduledJobs", "RecoveryRuns", "AuditLogs",
     ];
 
     internal static IReadOnlyList<string> ColumnsOf(PosDbContext db, string table) =>

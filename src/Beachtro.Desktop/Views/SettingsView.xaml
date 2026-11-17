@@ -58,8 +58,29 @@
             <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanBackup, Converter={StaticResource Visible}}">
                 <StackPanel>
                     <TextBlock Text="Backup" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                    <TextBlock Style="{StaticResource Hint}" Text="Creates a verified copy of the database and number journal in the local backups folder." />
+                    <TextBlock Style="{StaticResource Hint}" Text="Creates one verified .zip package (database copy, number and upload journals, checksums) in the local backups folder. A backup also runs automatically once per business day while an owner or administrator is signed in. At least seven are kept; a backup still waiting to upload is never removed." />
                     <Button Content="Back up now" Command="{Binding BackupCommand}" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanViewSync, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="Backup and sync status" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Every sale, refund, closed day and backup becomes a file in the artifacts folder, then waits to be copied off this PC. Google Drive is not connected yet; in the Test profile a simulated destination folder stands in for it." />
+                    <TextBlock Text="{Binding SyncSummary}" TextWrapping="Wrap" Margin="0,8,0,0" FontFamily="Consolas" FontSize="13" />
+                    <ItemsControl ItemsSource="{Binding SyncProblems}" Margin="0,6,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" Foreground="{StaticResource Danger}" Margin="0,2" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Refresh" Command="{Binding RefreshSyncCommand}" Margin="0,0,8,8" />
+                        <Button Content="Run now" Command="{Binding RunSyncNowCommand}" Margin="0,0,8,8" />
+                        <Button Content="Retry failed uploads" Command="{Binding RetryFailedCommand}" Margin="0,0,8,8"
+                                Visibility="{Binding CanRetrySync, Converter={StaticResource Visible}}" />
+                        <Button Content="{Binding DestinationButtonText}" Command="{Binding ToggleDestinationCommand}" Margin="0,0,8,8"
+                                Visibility="{Binding CanConfigureSync, Converter={StaticResource Visible}}" />
+                    </WrapPanel>
                 </StackPanel>
             </Border>
 

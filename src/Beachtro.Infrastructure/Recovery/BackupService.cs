@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Beachtro.Application.Common;
@@ -18,9 +19,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Beachtro.Infrastructure.Recovery;
 
 /// <summary>
-/// Minimal backup and controlled restore (sync/recovery design §Scheduling and backup package and
-/// §Restore runbook; IB-12). A backup is a folder holding a consistent SQLite snapshot, a copy of
-/// the number journal and a manifest with checksums. Zip packaging, retention and upload are IB-23.
+/// Backup and controlled restore (sync/recovery design §Scheduling and backup package and §Restore
+/// runbook; IB-12, IB-23). A backup is one .zip package holding a consistent SQLite snapshot, copies of
+/// the number and upload-identity journals and a manifest with per-member checksums. It is built in a
+/// temporary folder, verified, packaged, checksummed and only then renamed to its final name.
 /// </summary>
 public sealed class BackupService(
     IDbContextFactory<PosDbContext> contextFactory,
@@ -28,12 +30,21 @@ public sealed class BackupService(
     NumberSeriesService numbering,
     IClock clock,
     WriteGate writeGate,
-    LocalDataPaths paths) : IBackupService
+    LocalDataPaths paths,
+    Func<string, long>? freeSpace = null) : IBackupService
 {
     public const string ManifestFile = "manifest.json";
     public const string DatabaseFile = "pos.db";
     public const string JournalFile = "numbers.journal";
+    public const string UploadJournalFile = "uploads.journal";
     public const string ManifestSchema = "backup-manifest.v1";
+    public const string PackageExtension = ".zip";
+
+    /// <summary>Generations kept locally (sync design §Retention recommendation).</summary>
+    public const int KeepGenerations = 7;
+
+    private static readonly HashSet<string> AllowedMembers = new(StringComparer.Ordinal) { ManifestFile, DatabaseFile, JournalFile, UploadJournalFile };
+    private readonly Func<string, long> _freeSpace = freeSpace ?? Sync.SyncService.FreeBytes;
 
     public async Task<Result<BackupInfo>> CreateBackupAsync(UserSession session, CancellationToken cancellationToken = default)
     {
@@ -44,6 +55,17 @@ public sealed class BackupService(
         }
 
         using var gate = await writeGate.EnterAsync(cancellationToken).ConfigureAwait(false);
+
+        // Snapshot + package + margin must fit; never start a backup that would fill the disk.
+        var databaseBytes = File.Exists(paths.DatabaseFile) ? new FileInfo(paths.DatabaseFile).Length : 0;
+        var needed = (3 * databaseBytes) + (64L * 1024 * 1024);
+        var free = _freeSpace(paths.Backups);
+        if (free >= 0 && free < needed)
+        {
+            return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable,
+                $"Not enough free disk space for a backup (about {needed / (1024 * 1024)} MB needed, {free / (1024 * 1024)} MB free). Free some space; existing backups were kept.");
+        }
+
         var now = clock.UtcNowMilliseconds;
         var backupId = Guid.NewGuid();
         var stamp = DateTimeOffset.FromUnixTimeMilliseconds(now).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
@@ -75,6 +97,12 @@ public sealed class BackupService(
             if (File.Exists(paths.NumberJournalFile))
             {
                 File.Copy(paths.NumberJournalFile, Path.Combine(tempFolder, JournalFile));
+            }
+
+            var uploadJournalPath = Path.Combine(tempFolder, UploadJournalFile);
+            if (File.Exists(paths.UploadJournalFile))
+            {
+                File.Copy(paths.UploadJournalFile, uploadJournalPath);
             }
 
             var facts = ReadFacts(snapshotPath);
@@ -120,25 +148,49 @@ public sealed class BackupService(
                     w.WriteString(JournalFile, Sha256File(journalPath));
                 }
 
+                if (File.Exists(uploadJournalPath))
+                {
+                    w.WriteString(UploadJournalFile, Sha256File(uploadJournalPath));
+                }
+
                 w.WriteEndObject();
                 w.WriteEndObject();
             });
             await File.WriteAllTextAsync(Path.Combine(tempFolder, ManifestFile), manifest, cancellationToken).ConfigureAwait(false);
 
-            // 4. Only a complete, verified folder gets its final name.
-            Directory.Move(tempFolder, finalFolder);
-            var size = new FileInfo(Path.Combine(finalFolder, DatabaseFile)).Length;
+            // 4. Package, flush, re-verify the package itself, then give it its final name.
+            var package = finalFolder + PackageExtension;
+            var partial = package + ".partial";
+            ZipFile.CreateFromDirectory(tempFolder, partial, CompressionLevel.Optimal, includeBaseDirectory: false);
+            using (var flush = new FileStream(partial, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                flush.Flush(flushToDisk: true);
+            }
+
+            var packageProblems = VerifyPackage(partial);
+            if (packageProblems.Count > 0)
+            {
+                File.Delete(partial);
+                Directory.Delete(tempFolder, recursive: true);
+                return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable, "The backup package failed verification: " + string.Join(" ", packageProblems));
+            }
+
+            var packageHash = Sha256File(partial);
+            File.Move(partial, package);
+            Directory.Delete(tempFolder, recursive: true);
+            var size = new FileInfo(package).Length;
+            var relative = Path.GetRelativePath(paths.Root, package).Replace('\\', '/');
 
             await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
             db.Backups.Add(new Backup
             {
                 Id = backupId,
-                RelativePath = Path.GetRelativePath(paths.Root, finalFolder).Replace('\\', '/'),
+                RelativePath = relative,
                 SchemaVersion = Math.Max(1, facts.Migrations.Count),
                 AppVersion = AppVersion,
                 CreatedUtc = now,
                 SizeBytes = size,
-                Sha256 = dbHash,
+                Sha256 = packageHash,
                 ManifestJson = manifest,
                 LastSaleId = facts.LastSaleId,
                 LastSaleNumber = facts.LastSaleNumber,
@@ -146,17 +198,40 @@ public sealed class BackupService(
                 VerificationState = BackupVerificationState.Verified,
                 UploadState = BackupUploadState.NotQueued,
             });
+
+            // The package is complete, so its artifact is created Ready; it can never be rebuilt from a newer database.
+            db.ArtifactRecords.Add(new ArtifactRecord
+            {
+                Id = Guid.NewGuid(),
+                LogicalKey = $"backup/{backupId:D}/schema1",
+                Type = ArtifactType.Backup,
+                SourceId = backupId,
+                BackupId = backupId,
+                PayloadSchemaVersion = 1,
+                RelativePath = relative,
+                Sha256 = packageHash,
+                SizeBytes = size,
+                State = ArtifactState.Ready,
+                CreatedUtc = now,
+                MaterializedUtc = now,
+            });
             AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Backup.Created", "Backup", backupId.ToString(), null,
-                new { folder = Path.GetFileName(finalFolder), sizeBytes = size, sha256 = dbHash, lastSaleNumber = facts.LastSaleNumber });
+                new { package = Path.GetFileName(package), sizeBytes = size, sha256 = packageHash, databaseSha256 = dbHash, lastSaleNumber = facts.LastSaleNumber });
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-            return Result<BackupInfo>.Ok(new BackupInfo(backupId, finalFolder, size, dbHash, now, facts.LastSaleNumber));
+            var pruned = await ApplyRetentionAsync(db, now, session, cancellationToken).ConfigureAwait(false);
+            return Result<BackupInfo>.Ok(new BackupInfo(backupId, package, size, packageHash, now, facts.LastSaleNumber, pruned));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException or InvalidDataException)
         {
             if (Directory.Exists(tempFolder))
             {
                 Directory.Delete(tempFolder, recursive: true);
+            }
+
+            if (File.Exists(finalFolder + PackageExtension + ".partial"))
+            {
+                File.Delete(finalFolder + PackageExtension + ".partial");
             }
 
             return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable, "The backup could not be written. The live database was not changed.");
@@ -172,7 +247,10 @@ public sealed class BackupService(
         }
 
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-        return Result<BackupCandidateReport>.Ok(Validate(backupFolder, db.Database.GetMigrations().ToArray()));
+        var (folder, unpackProblem) = Unpack(backupFolder);
+        return Result<BackupCandidateReport>.Ok(unpackProblem is not null
+            ? new BackupCandidateReport(false, [unpackProblem], null, null, null, 0)
+            : Validate(folder!, db.Database.GetMigrations().ToArray()));
     }
 
     public async Task<Result<RestoreResult>> RestoreAsync(UserSession session, string backupFolder, string reason, CancellationToken cancellationToken = default)
@@ -198,6 +276,13 @@ public sealed class BackupService(
             currentInstallation = await current.InstallationState.Select(s => s.InstallationId).SingleAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        var (unpacked, unpackProblem) = Unpack(backupFolder);
+        if (unpackProblem is not null)
+        {
+            return Result<RestoreResult>.Fail(ResultStatus.Validation, "The backup cannot be restored: " + unpackProblem);
+        }
+
+        backupFolder = unpacked!;
         var report = Validate(backupFolder, knownMigrations);
         if (!report.IsRestorable)
         {
@@ -262,6 +347,7 @@ public sealed class BackupService(
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         var reconciliation = await numbering.ReconcileAsync(db, "restore", cancellationToken).ConfigureAwait(false);
+        var uploads = await Sync.SyncReconciler.AfterRestoreAsync(db, new Sync.UploadJournal(paths.UploadJournalFile), now, cancellationToken).ConfigureAwait(false);
         var prepared = await db.CheckoutRequests.CountAsync(r => r.State == RequestState.Prepared, cancellationToken).ConfigureAwait(false)
             + await db.CorrectionRequests.CountAsync(r => r.State == RequestState.Prepared, cancellationToken).ConfigureAwait(false);
 
@@ -280,7 +366,8 @@ public sealed class BackupService(
             NewGenerationId = Guid.NewGuid(),
         });
         AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Recovery.Restored", "RecoveryRun", runId.ToString(), reason,
-            new { backupId = report.BackupId, lastSaleNumber = report.LastSaleNumber, blockedSeries = reconciliation.Blocked.Count, preparedRequests = prepared });
+            new { backupId = report.BackupId, lastSaleNumber = report.LastSaleNumber, blockedSeries = reconciliation.Blocked.Count, preparedRequests = prepared,
+                uploadsReset = uploads.Reset, uploadsAdopted = uploads.Adopted, uploadsHeld = uploads.Held });
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<RestoreResult>.Ok(new RestoreResult(runId, preserved, reconciliation.Blocked, prepared));
@@ -327,6 +414,128 @@ public sealed class BackupService(
         AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Recovery.Reopened", "InstallationState", state.InstallationId.ToString(), notes, null);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return Result.Ok();
+    }
+
+    // ---------------------------------------------------------------- retention and packages
+
+    /// <summary>
+    /// Keeps at least <see cref="KeepGenerations"/> local generations and never deletes the two newest
+    /// verified backups, any backup still waiting to upload, or one under an explicit protection date.
+    /// Pruning is by count only, never because an upload succeeded. The Backups row stays as history.
+    /// </summary>
+    internal async Task<int> ApplyRetentionAsync(PosDbContext db, long now, UserSession session, CancellationToken cancellationToken)
+    {
+        var present = (await db.Backups.OrderByDescending(b => b.CreatedUtc).ToListAsync(cancellationToken).ConfigureAwait(false))
+            .Where(b => Sync.SyncService.Exists(paths, b.RelativePath)).ToList();
+        if (present.Count <= KeepGenerations)
+        {
+            return 0;
+        }
+
+        var protectedIds = present.Where(b => b.VerificationState == BackupVerificationState.Verified).Take(2).Select(b => b.Id)
+            .Concat(present.Where(b => b.UploadState is BackupUploadState.Pending or BackupUploadState.Failed).Select(b => b.Id))
+            .Concat(present.Where(b => b.RetentionProtectUntilUtc > now).Select(b => b.Id))
+            .ToHashSet();
+        var pruned = 0;
+        foreach (var backup in present.Skip(KeepGenerations).Where(b => !protectedIds.Contains(b.Id)))
+        {
+            var full = Path.Combine(paths.Root, backup.RelativePath);
+            try
+            {
+                if (File.Exists(full))
+                {
+                    File.Delete(full);
+                }
+                else if (Directory.Exists(full))
+                {
+                    Directory.Delete(full, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Backup.Pruned", "Backup", backup.Id.ToString(), null,
+                new { file = Path.GetFileName(backup.RelativePath), keep = KeepGenerations });
+            pruned++;
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return pruned;
+    }
+
+    /// <summary>A package is extracted into a fresh recovery work folder (only known member names); a folder is used as is.</summary>
+    private (string? Folder, string? Problem) Unpack(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return (null, "Choose a backup.");
+        }
+
+        if (Directory.Exists(path))
+        {
+            return (path, null);
+        }
+
+        if (!File.Exists(path) || !path.EndsWith(PackageExtension, StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, "The backup package was not found.");
+        }
+
+        var target = Path.Combine(paths.Recovery, $"candidate_{Guid.NewGuid():N}");
+        try
+        {
+            using var zip = ZipFile.OpenRead(path);
+            if (zip.Entries.Any(e => !AllowedMembers.Contains(e.FullName)))
+            {
+                return (null, "The package contains unexpected files.");
+            }
+
+            Directory.CreateDirectory(target);
+            foreach (var entry in zip.Entries)
+            {
+                entry.ExtractToFile(Path.Combine(target, entry.FullName));
+            }
+
+            return (target, null);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            return (null, "The backup package is damaged or unreadable.");
+        }
+    }
+
+    /// <summary>Checks every member against the manifest inside the package.</summary>
+    private static List<string> VerifyPackage(string package)
+    {
+        var problems = new List<string>();
+        using var zip = ZipFile.OpenRead(package);
+        var manifestEntry = zip.GetEntry(ManifestFile);
+        if (manifestEntry is null)
+        {
+            return ["The package has no manifest."];
+        }
+
+        using var manifestStream = manifestEntry.Open();
+        using var doc = JsonDocument.Parse(manifestStream);
+        foreach (var file in doc.RootElement.GetProperty("files").EnumerateObject())
+        {
+            var entry = zip.GetEntry(file.Name);
+            if (entry is null)
+            {
+                problems.Add($"Member {file.Name} is missing.");
+                continue;
+            }
+
+            using var stream = entry.Open();
+            if (Convert.ToHexStringLower(SHA256.HashData(stream)) != file.Value.GetString())
+            {
+                problems.Add($"Member {file.Name} does not match its checksum.");
+            }
+        }
+
+        return problems;
     }
 
     // ---------------------------------------------------------------- internals

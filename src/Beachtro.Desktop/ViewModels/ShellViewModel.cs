@@ -103,6 +103,7 @@ public sealed class ShellViewModel : ObservableObject
     internal async Task OnSignedInAsync(UserSession session)
     {
         Services.Sessions.Start(session);
+        Services.Background.Nudge();   // overdue backups and reports run soon after an authorized sign-in
         OperatorName = session.DisplayName;
         Notice = null;
         if (session.MustChangePassword)

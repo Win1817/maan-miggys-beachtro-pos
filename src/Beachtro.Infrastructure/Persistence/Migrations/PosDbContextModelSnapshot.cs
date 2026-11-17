@@ -16,6 +16,37 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
+            modelBuilder.Entity("Beachtro.Infrastructure.Persistence.Entities.ArtifactHold", b =>
+                {
+                    b.Property<string>("ArtifactId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DetectedUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ResolvedUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ArtifactId");
+
+                    b.ToTable("ArtifactHolds", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ArtifactHolds_ArtifactId_Domain", "length(\"ArtifactId\") = 36 AND \"ArtifactId\" = lower(\"ArtifactId\")");
+
+                            t.HasCheckConstraint("CK_ArtifactHolds_Code", "length(trim(\"Code\")) > 0");
+
+                            t.HasCheckConstraint("CK_ArtifactHolds_Resolved", " \"ResolvedUtc\" IS NULL OR \"ResolvedUtc\" >= \"DetectedUtc\" ");
+                        });
+                });
+
             modelBuilder.Entity("Beachtro.Infrastructure.Persistence.Entities.ArtifactRecord", b =>
                 {
                     b.Property<string>("Id")
@@ -91,13 +122,13 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_ArtifactRecords_LogicalKey", "length(trim(\"LogicalKey\")) > 0");
 
-                            t.HasCheckConstraint("CK_ArtifactRecords_Materialized", "(\"State\" = 'Intent' AND \"Sha256\" IS NULL AND \"SizeBytes\" IS NULL AND \"MaterializedUtc\" IS NULL)\nOR (\"State\" = 'Ready' AND \"RelativePath\" IS NOT NULL AND \"Sha256\" IS NOT NULL AND \"SizeBytes\" IS NOT NULL\n    AND \"SizeBytes\" >= 0 AND \"MaterializedUtc\" IS NOT NULL\n    AND length(\"Sha256\") = 64 AND \"Sha256\" NOT GLOB '*[^0-9a-f]*')");
+                            t.HasCheckConstraint("CK_ArtifactRecords_Materialized", "(\"State\" = 'Intent' AND \"Sha256\" IS NULL AND \"SizeBytes\" IS NULL AND \"MaterializedUtc\" IS NULL)\r\nOR (\"State\" = 'Ready' AND \"RelativePath\" IS NOT NULL AND \"Sha256\" IS NOT NULL AND \"SizeBytes\" IS NOT NULL\r\n    AND \"SizeBytes\" >= 0 AND \"MaterializedUtc\" IS NOT NULL\r\n    AND length(\"Sha256\") = 64 AND \"Sha256\" NOT GLOB '*[^0-9a-f]*')");
 
                             t.HasCheckConstraint("CK_ArtifactRecords_OrderId_Domain", "\"OrderId\" IS NULL OR (length(\"OrderId\") = 36 AND \"OrderId\" = lower(\"OrderId\"))");
 
                             t.HasCheckConstraint("CK_ArtifactRecords_ReportRunId_Domain", "\"ReportRunId\" IS NULL OR (length(\"ReportRunId\") = 36 AND \"ReportRunId\" = lower(\"ReportRunId\"))");
 
-                            t.HasCheckConstraint("CK_ArtifactRecords_Source", "(\"Type\" = 'SaleJson' AND \"OrderId\" IS NOT NULL AND \"CorrectionId\" IS NULL AND \"ReportRunId\" IS NULL AND \"BackupId\" IS NULL AND \"SourceId\" = \"OrderId\")\nOR (\"Type\" = 'CorrectionJson' AND \"CorrectionId\" IS NOT NULL AND \"OrderId\" IS NULL AND \"ReportRunId\" IS NULL AND \"BackupId\" IS NULL AND \"SourceId\" = \"CorrectionId\")\nOR (\"Type\" IN ('ReportCsv', 'ReportPdf') AND \"ReportRunId\" IS NOT NULL AND \"OrderId\" IS NULL AND \"CorrectionId\" IS NULL AND \"BackupId\" IS NULL AND \"SourceId\" = \"ReportRunId\")\nOR (\"Type\" = 'Backup' AND \"BackupId\" IS NOT NULL AND \"OrderId\" IS NULL AND \"CorrectionId\" IS NULL AND \"ReportRunId\" IS NULL AND \"SourceId\" = \"BackupId\")");
+                            t.HasCheckConstraint("CK_ArtifactRecords_Source", "(\"Type\" = 'SaleJson' AND \"OrderId\" IS NOT NULL AND \"CorrectionId\" IS NULL AND \"ReportRunId\" IS NULL AND \"BackupId\" IS NULL AND \"SourceId\" = \"OrderId\")\r\nOR (\"Type\" = 'CorrectionJson' AND \"CorrectionId\" IS NOT NULL AND \"OrderId\" IS NULL AND \"ReportRunId\" IS NULL AND \"BackupId\" IS NULL AND \"SourceId\" = \"CorrectionId\")\r\nOR (\"Type\" IN ('ReportCsv', 'ReportPdf') AND \"ReportRunId\" IS NOT NULL AND \"OrderId\" IS NULL AND \"CorrectionId\" IS NULL AND \"BackupId\" IS NULL AND \"SourceId\" = \"ReportRunId\")\r\nOR (\"Type\" = 'Backup' AND \"BackupId\" IS NOT NULL AND \"OrderId\" IS NULL AND \"CorrectionId\" IS NULL AND \"ReportRunId\" IS NULL AND \"SourceId\" = \"BackupId\")");
 
                             t.HasCheckConstraint("CK_ArtifactRecords_SourceId_Domain", "length(\"SourceId\") = 36 AND \"SourceId\" = lower(\"SourceId\")");
 
@@ -595,6 +626,9 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
                     b.Property<string>("AccountLabel")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BindingId")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("Enabled")
                         .HasColumnType("INTEGER");
 
@@ -621,6 +655,8 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                     b.ToTable("CloudStorageSettings", null, t =>
                         {
+                            t.HasCheckConstraint("CK_CloudStorageSettings_BindingId_Domain", "\"BindingId\" IS NULL OR (length(\"BindingId\") = 36 AND \"BindingId\" = lower(\"BindingId\"))");
+
                             t.HasCheckConstraint("CK_CloudStorageSettings_Enabled_Domain", "\"Enabled\" IN (0, 1)");
 
                             t.HasCheckConstraint("CK_CloudStorageSettings_Singleton", " \"Id\" = 1 ");
@@ -1834,7 +1870,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_PrintJobs_RequestId_Domain", "length(\"RequestId\") = 36 AND \"RequestId\" = lower(\"RequestId\")");
 
-                            t.HasCheckConstraint("CK_PrintJobs_Source", "(\"Purpose\" = 'Test' AND \"IsTestModel\" = 1 AND \"OrderId\" IS NULL AND \"CorrectionId\" IS NULL)\nOR (\"Purpose\" <> 'Test' AND \"IsTestModel\" = 0\n    AND ((\"OrderId\" IS NULL AND \"CorrectionId\" IS NOT NULL) OR (\"OrderId\" IS NOT NULL AND \"CorrectionId\" IS NULL)))");
+                            t.HasCheckConstraint("CK_PrintJobs_Source", "(\"Purpose\" = 'Test' AND \"IsTestModel\" = 1 AND \"OrderId\" IS NULL AND \"CorrectionId\" IS NULL)\r\nOR (\"Purpose\" <> 'Test' AND \"IsTestModel\" = 0\r\n    AND ((\"OrderId\" IS NULL AND \"CorrectionId\" IS NOT NULL) OR (\"OrderId\" IS NOT NULL AND \"CorrectionId\" IS NULL)))");
 
                             t.HasCheckConstraint("CK_PrintJobs_State_Domain", "\"State\" IN ('Pending', 'Submitting', 'SpoolAccepted', 'Failed', 'OutcomeUnknown', 'OperatorConfirmed')");
                         });
@@ -2355,7 +2391,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_SyncQueue_Id_Domain", "length(\"Id\") = 36 AND \"Id\" = lower(\"Id\")");
 
-                            t.HasCheckConstraint("CK_SyncQueue_Lease", "(\"State\" = 'InProgress' AND \"LeaseOwner\" IS NOT NULL AND \"LeaseExpiresUtc\" IS NOT NULL)\nOR (\"State\" <> 'InProgress' AND \"LeaseOwner\" IS NULL AND \"LeaseExpiresUtc\" IS NULL)");
+                            t.HasCheckConstraint("CK_SyncQueue_Lease", "(\"State\" = 'InProgress' AND \"LeaseOwner\" IS NOT NULL AND \"LeaseExpiresUtc\" IS NOT NULL)\r\nOR (\"State\" <> 'InProgress' AND \"LeaseOwner\" IS NULL AND \"LeaseExpiresUtc\" IS NULL)");
 
                             t.HasCheckConstraint("CK_SyncQueue_State_Domain", "\"State\" IN ('Pending', 'InProgress', 'Succeeded', 'Failed', 'RecoveryHold')");
 
@@ -2498,6 +2534,15 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_UserRoles_UserId_Domain", "length(\"UserId\") = 36 AND \"UserId\" = lower(\"UserId\")");
                         });
+                });
+
+            modelBuilder.Entity("Beachtro.Infrastructure.Persistence.Entities.ArtifactHold", b =>
+                {
+                    b.HasOne("Beachtro.Infrastructure.Persistence.Entities.ArtifactRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ArtifactId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Beachtro.Infrastructure.Persistence.Entities.ArtifactRecord", b =>

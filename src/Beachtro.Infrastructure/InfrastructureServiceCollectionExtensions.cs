@@ -30,7 +30,13 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<Application.Receipts.IPrintService, Receipts.PrintService>();
         services.AddSingleton<Application.Configuration.IDemoDataService, Configuration.DemoDataService>();
         services.AddSingleton<Application.Shifts.IShiftService, Shifts.ShiftService>();
-        services.AddSingleton<Application.Reports.IReportService, Reports.ReportService>();
+        services.AddSingleton<Reports.ReportService>();
+        services.AddSingleton<Application.Reports.IReportService>(sp => sp.GetRequiredService<Reports.ReportService>());
+        services.AddSingleton<Sync.ArtifactMaterializer>();
+        services.AddSingleton<Sync.IRemoteStoreFactory, Sync.RemoteStoreFactory>();
+        services.AddSingleton<Sync.SyncService>();
+        services.AddSingleton<Application.Sync.ISyncService>(sp => sp.GetRequiredService<Sync.SyncService>());
+        services.AddSingleton<Application.Sync.IJobScheduler, Sync.JobScheduler>();
         return services;
     }
 }

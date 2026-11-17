@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using Beachtro.Application.Common;
 using Beachtro.Application.Recovery;
@@ -98,14 +100,19 @@ public sealed class RecoveryTests : IAsyncLifetime
         await _h.SellCashAsync((_h.Tea, 2));
         var backup = Ok(await _h.Backups.CreateBackupAsync(_h.Owner));
 
-        Assert.True(File.Exists(Path.Combine(backup.Folder, "pos.db")));
-        Assert.True(File.Exists(Path.Combine(backup.Folder, "manifest.json")));
-        Assert.True(File.Exists(Path.Combine(backup.Folder, "numbers.journal")));
-        Assert.Equal("MB-20251116-000001", backup.LastSaleNumber);
-        Assert.Empty(Directory.GetDirectories(_h.Security.Database.Paths.Backups, "*.partial"));
-        Assert.Equal(1L, _h.Count("Backups", $"Id = '{backup.BackupId}' AND VerificationState = 'Verified' AND Sha256 = '{backup.Sha256}'"));
+        Assert.EndsWith(".zip", backup.PackagePath, StringComparison.Ordinal);
+        using (var zip = ZipFile.OpenRead(backup.PackagePath))
+        {
+            Assert.Equal(["manifest.json", "numbers.journal", "pos.db"], zip.Entries.Select(e => e.FullName).Order(StringComparer.Ordinal));
+        }
 
-        var report = Ok(await _h.Backups.ValidateCandidateAsync(_h.Owner, backup.Folder));
+        Assert.Equal("MB-20251116-000001", backup.LastSaleNumber);
+        Assert.Empty(Directory.GetFileSystemEntries(_h.Security.Database.Paths.Backups, "*.partial"));
+        Assert.Equal(backup.Sha256, Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(backup.PackagePath))));
+        Assert.Equal(1L, _h.Count("Backups", $"Id = '{backup.BackupId}' AND VerificationState = 'Verified' AND Sha256 = '{backup.Sha256}'"));
+        Assert.Equal(1L, _h.Count("ArtifactRecords", $"BackupId = '{backup.BackupId}' AND Type = 'Backup' AND State = 'Ready' AND Sha256 = '{backup.Sha256}'"));
+
+        var report = Ok(await _h.Backups.ValidateCandidateAsync(_h.Owner, backup.PackagePath));
         Assert.True(report.IsRestorable, string.Join(" ", report.Problems));
     }
 
@@ -113,16 +120,66 @@ public sealed class RecoveryTests : IAsyncLifetime
     public async Task A_tampered_backup_is_rejected()
     {
         var backup = Ok(await _h.Backups.CreateBackupAsync(_h.Owner));
-        await using (var stream = new FileStream(Path.Combine(backup.Folder, "pos.db"), FileMode.Open, FileAccess.Write))
+        using (var zip = ZipFile.Open(backup.PackagePath, ZipArchiveMode.Update))
         {
-            stream.Seek(-1, SeekOrigin.End);
-            stream.WriteByte(0x42);
+            zip.GetEntry("pos.db")!.Delete();
+            var entry = zip.CreateEntry("pos.db");
+            await using var stream = entry.Open();
+            stream.Write(Encoding.UTF8.GetBytes("not a database"));
         }
 
-        var report = Ok(await _h.Backups.ValidateCandidateAsync(_h.Owner, backup.Folder));
+        var report = Ok(await _h.Backups.ValidateCandidateAsync(_h.Owner, backup.PackagePath));
         Assert.False(report.IsRestorable);
         Assert.Contains(report.Problems, p => p.Contains("checksum", StringComparison.Ordinal));
-        Assert.Equal(ResultStatus.Validation, (await _h.Backups.RestoreAsync(_h.Owner, backup.Folder, "drill")).Status);
+        Assert.Equal(ResultStatus.Validation, (await _h.Backups.RestoreAsync(_h.Owner, backup.PackagePath, "drill")).Status);
+    }
+
+    [Fact]
+    public async Task A_package_with_unexpected_members_is_rejected()
+    {
+        var backup = Ok(await _h.Backups.CreateBackupAsync(_h.Owner));
+        using (var zip = ZipFile.Open(backup.PackagePath, ZipArchiveMode.Update))
+        {
+            zip.CreateEntry("../escape.txt");
+        }
+
+        var report = Ok(await _h.Backups.ValidateCandidateAsync(_h.Owner, backup.PackagePath));
+        Assert.False(report.IsRestorable);
+    }
+
+    [Fact]
+    public async Task A_backup_is_refused_when_disk_space_is_short_and_nothing_is_written()
+    {
+        _h.FreeSpaceBytes = 10 * 1024 * 1024;
+        var result = await _h.Backups.CreateBackupAsync(_h.Owner);
+        Assert.Equal(ResultStatus.StorageUnavailable, result.Status);
+        Assert.Empty(Directory.GetFileSystemEntries(_h.Security.Database.Paths.Backups));
+        Assert.Equal(0L, _h.Count("Backups"));
+    }
+
+    [Fact]
+    public async Task Retention_keeps_seven_generations_and_any_backup_still_waiting_to_upload()
+    {
+        var made = new List<Application.Recovery.BackupInfo>();
+        for (var i = 0; i < 9; i++)
+        {
+            _h.Clock.Advance(TimeSpan.FromMinutes(1));
+            if (i == 0)
+            {
+                made.Add(Ok(await _h.Backups.CreateBackupAsync(_h.Owner)));
+                _h.Security.Database.Execute($"UPDATE Backups SET UploadState = 'Pending' WHERE Id = '{made[0].BackupId}'");
+                continue;
+            }
+
+            made.Add(Ok(await _h.Backups.CreateBackupAsync(_h.Owner)));
+        }
+
+        // Oldest (waiting to upload) is kept; the second oldest is pruned; the newest seven remain.
+        Assert.True(File.Exists(made[0].PackagePath));
+        Assert.False(File.Exists(made[1].PackagePath));
+        Assert.All(made.Skip(2), b => Assert.True(File.Exists(b.PackagePath)));
+        Assert.Equal(9L, _h.Count("Backups"));
+        Assert.Equal(1L, _h.Count("AuditLogs", "Action = 'Backup.Pruned'"));
     }
 
     [Fact]
@@ -133,7 +190,7 @@ public sealed class RecoveryTests : IAsyncLifetime
         await _h.SellCashAsync((_h.Tea, 1));                       // 000002, after the backup
         await _h.SellCashAsync((_h.Tea, 1));                       // 000003, after the backup
 
-        var restored = Ok(await _h.Backups.RestoreAsync(_h.Owner, backup.Folder, "drill: replacement after disk fault"));
+        var restored = Ok(await _h.Backups.RestoreAsync(_h.Owner, backup.PackagePath, "drill: replacement after disk fault"));
         Assert.True(File.Exists(Path.Combine(restored.PreservedFolder, "pos.db")));
         Assert.True(File.Exists(Path.Combine(restored.PreservedFolder, "numbers.journal")));
         Assert.Empty(restored.BlockedSeries);
@@ -161,7 +218,7 @@ public sealed class RecoveryTests : IAsyncLifetime
         var backup = Ok(await _h.Backups.CreateBackupAsync(_h.Owner));
         File.Delete(JournalPath);
 
-        var restored = Ok(await _h.Backups.RestoreAsync(_h.Owner, backup.Folder, "drill: journal lost with disk"));
+        var restored = Ok(await _h.Backups.RestoreAsync(_h.Owner, backup.PackagePath, "drill: journal lost with disk"));
         Assert.Single(restored.BlockedSeries);
 
         var owner = await SignInOwnerAgainAsync();

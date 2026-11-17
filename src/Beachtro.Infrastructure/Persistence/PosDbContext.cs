@@ -45,6 +45,7 @@ public sealed class PosDbContext(DbContextOptions<PosDbContext> options) : DbCon
     public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
     public DbSet<ReportRun> ReportRuns => Set<ReportRun>();
     public DbSet<ArtifactRecord> ArtifactRecords => Set<ArtifactRecord>();
+    public DbSet<ArtifactHold> ArtifactHolds => Set<ArtifactHold>();
     public DbSet<SyncQueueItem> SyncQueue => Set<SyncQueueItem>();
     public DbSet<SyncAttempt> SyncHistory => Set<SyncAttempt>();
     public DbSet<Backup> Backups => Set<Backup>();

@@ -130,6 +130,10 @@ public sealed class CloudStorageSettings
     public const int SingletonId = 1;
 
     public int Id { get; set; } = SingletonId;
+
+    /// <summary>Identity of the bound destination; queue rows belong to one binding (IB-20). Null until first bound.</summary>
+    public Guid? BindingId { get; set; }
+
     public required string Provider { get; set; }
     public string? AccountLabel { get; set; }
     public string? RootFolderId { get; set; }

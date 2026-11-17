@@ -71,6 +71,7 @@ public partial class App
         builder.Services.AddSerilog();
         builder.Services.AddBeachtroInfrastructure(paths);
         builder.Services.AddSingleton<Beachtro.Application.Receipts.IReceiptPrinter, Printing.WindowsReceiptPrinter>();
+        builder.Services.AddSingleton<BackgroundWork>();
         builder.Services.AddSingleton<ViewModels.PosServices>();
         builder.Services.AddSingleton<ViewModels.ShellViewModel>();
         builder.Services.AddSingleton<MainWindow>();
@@ -103,6 +104,9 @@ public partial class App
             return;
         }
 
+        // Artifact files, uploads and scheduled jobs run in the background; checkout never waits for them.
+        _host.Services.GetRequiredService<BackgroundWork>().Start();
+
         var window = _host.Services.GetRequiredService<MainWindow>();
         MainWindow = window;
         window.Show();
@@ -114,6 +118,7 @@ public partial class App
         {
             if (_host is not null)
             {
+                _host.Services.GetRequiredService<BackgroundWork>().StopAsync().GetAwaiter().GetResult();
                 _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
                 _host.Dispose();
             }

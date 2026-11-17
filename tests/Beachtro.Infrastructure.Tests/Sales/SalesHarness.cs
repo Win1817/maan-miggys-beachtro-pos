@@ -11,6 +11,8 @@ using Beachtro.Infrastructure.Recovery;
 using Beachtro.Infrastructure.Reports;
 using Beachtro.Infrastructure.Sales;
 using Beachtro.Infrastructure.Shifts;
+using Beachtro.Infrastructure.Sync;
+using Beachtro.Infrastructure.Tests.Sync;
 using Beachtro.Infrastructure.Tests.Security;
 using static Beachtro.Infrastructure.Tests.Security.SecurityHarness;
 
@@ -37,6 +39,13 @@ public sealed class SalesHarness : IDisposable
     public BackupService Backups { get; private set; } = null!;
     public ShiftService Shifts { get; private set; } = null!;
     public ReportService Reports { get; private set; } = null!;
+    public ArtifactMaterializer Materializer { get; private set; } = null!;
+    public FakeRemoteStore Remote { get; } = new();
+    public SyncService Sync { get; private set; } = null!;
+    public JobScheduler Scheduler { get; private set; } = null!;
+
+    /// <summary>Free disk space reported to backups; -1 means unknown (not limited).</summary>
+    public long FreeSpaceBytes { get; set; } = -1;
     public UserSession Owner { get; private set; } = null!;
     public Guid CategoryId { get; private set; }
 
@@ -60,9 +69,12 @@ public sealed class SalesHarness : IDisposable
         h.Catalog = new CatalogService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
         h.Checkout = new CheckoutService(s.Database.Factory, s.Identity, s.Profiles, h.Numbers, s.Clock, s.Gate);
         h.Corrections = new CorrectionService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
-        h.Backups = new BackupService(s.Database.Factory, s.Identity, h.Numbers, s.Clock, s.Gate, s.Database.Paths);
+        h.Backups = new BackupService(s.Database.Factory, s.Identity, h.Numbers, s.Clock, s.Gate, s.Database.Paths, _ => h.FreeSpaceBytes);
         h.Shifts = new ShiftService(s.Database.Factory, s.Identity, s.Clock, s.Gate);
         h.Reports = new ReportService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
+        h.Materializer = new ArtifactMaterializer(s.Database.Factory, s.Clock, s.Gate, s.Database.Paths);
+        h.Sync = h.NewSyncWorker();
+        h.Scheduler = new JobScheduler(s.Database.Factory, s.Profiles, s.Clock, s.Gate, h.Backups, h.Reports);
 
         h.Owner = await s.BootstrapOwnerAsync();
         var now = s.Clock.UtcNowMilliseconds;
@@ -93,6 +105,10 @@ public sealed class SalesHarness : IDisposable
         return id;
     }
 
+    /// <summary>Another upload worker over the same database (its own lease owner), always using the fake remote.</summary>
+    public SyncService NewSyncWorker() =>
+        new(Security.Database.Factory, Security.Identity, Clock, Security.Gate, Security.Database.Paths, Materializer, new FakeRemoteFactory(Remote), () => 1.0);
+
     public static CartInput Cart(params (Guid Product, int Units)[] lines) =>
         new(OrderType.DineIn, lines.Select(l => new CartLineInput(l.Product, l.Units * 1000L)).ToArray());
 
@@ -116,5 +132,10 @@ public sealed class SalesHarness : IDisposable
     /// <summary>Keeps the owner's sensitive-action window open after clock advances.</summary>
     public async Task ReauthOwnerAsync() => Ok(await Security.Identity.ReauthenticateAsync(Owner, OwnerPassword));
 
-    public void Dispose() => Security.Dispose();
+    public void Dispose()
+    {
+        Sync.Dispose();
+        Scheduler.Dispose();
+        Security.Dispose();
+    }
 }

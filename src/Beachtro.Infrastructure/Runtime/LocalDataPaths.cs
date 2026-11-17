@@ -35,6 +35,9 @@ public sealed class LocalDataPaths
     /// </summary>
     public string NumberJournalFile => Path.Combine(Data, "numbers.journal");
 
+    /// <summary>External upload-identity journal (sync design §Retry-safe remote creation); same reasoning as the number journal.</summary>
+    public string UploadJournalFile => Path.Combine(Data, "uploads.journal");
+
     public IEnumerable<string> AllDirectories => [Data, Artifacts, Backups, Logs, Secrets, Recovery];
 
     /// <summary>Default per-user location, e.g. %LocalAppData%\BeachtroPOS-Test.</summary>

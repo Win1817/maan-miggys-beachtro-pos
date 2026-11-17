@@ -3,7 +3,8 @@ using Beachtro.Application.Security;
 
 namespace Beachtro.Application.Recovery;
 
-public sealed record BackupInfo(Guid BackupId, string Folder, long SizeBytes, string Sha256, long CreatedUtc, string? LastSaleNumber);
+/// <summary>A verified backup package (one .zip: database snapshot, journals and manifest). Sha256 is over the whole package.</summary>
+public sealed record BackupInfo(Guid BackupId, string PackagePath, long SizeBytes, string Sha256, long CreatedUtc, string? LastSaleNumber, int Pruned);
 
 public sealed record BackupCandidateReport(
     bool IsRestorable,

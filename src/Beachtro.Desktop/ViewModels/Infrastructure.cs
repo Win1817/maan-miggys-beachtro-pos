@@ -8,6 +8,7 @@ using Beachtro.Application.Reports;
 using Beachtro.Application.Sales;
 using Beachtro.Application.Security;
 using Beachtro.Application.Shifts;
+using Beachtro.Application.Sync;
 using Beachtro.Desktop.Mvvm;
 using Beachtro.Infrastructure.Runtime;
 
@@ -27,6 +28,8 @@ public sealed record PosServices(
     IDemoDataService Demo,
     IShiftService Shifts,
     IReportService Reports,
+    ISyncService Sync,
+    BackgroundWork Background,
     SessionManager Sessions,
     IClock Clock,
     LocalDataPaths Paths);

@@ -19,6 +19,8 @@ public sealed class SettingsViewModel : PageViewModel
     private string _profileSummary = string.Empty;
     private string _testPreview = string.Empty;
     private bool _requireShift;
+    private string _syncSummary = string.Empty;
+    private bool _destinationEnabled;
 
     public SettingsViewModel(ShellViewModel shell)
         : base(shell)
@@ -29,6 +31,10 @@ public sealed class SettingsViewModel : PageViewModel
         LoadSampleCommand = Command(LoadSampleAsync);
         BackupCommand = Command(_ => BackupAsync());
         SaveShiftPolicyCommand = Command(_ => SaveShiftPolicyAsync());
+        RefreshSyncCommand = Command(_ => RefreshSyncAsync());
+        RunSyncNowCommand = Command(_ => RunSyncNowAsync());
+        RetryFailedCommand = Command(_ => RetryFailedAsync(), _ => CanRetrySync);
+        ToggleDestinationCommand = Command(_ => ToggleDestinationAsync(), _ => CanConfigureSync);
     }
 
     public override string Title => "Settings";
@@ -42,6 +48,26 @@ public sealed class SettingsViewModel : PageViewModel
     public bool CanConfigurePrinter => Services.Sessions.Current?.Has(Capabilities.SettingsOperational) ?? false;
     public bool CanLoadSample => IsTestProfile && (Services.Sessions.Current?.Has(Capabilities.SettingsFinancial) ?? false);
     public bool CanBackup => Services.Sessions.Current?.Has(Capabilities.BackupCreateVerify) ?? false;
+    public bool CanViewSync => Services.Sessions.Current?.Has(Capabilities.SyncView) ?? false;
+    public bool CanRetrySync => Services.Sessions.Current?.Has(Capabilities.SyncRetry) ?? false;
+    public bool CanConfigureSync => IsTestProfile && (Services.Sessions.Current?.Has(Capabilities.SyncConfigure) ?? false);
+
+    public ObservableCollection<string> SyncProblems { get; } = [];
+    public string SyncSummary { get => _syncSummary; private set => Set(ref _syncSummary, value); }
+
+    public bool DestinationEnabled
+    {
+        get => _destinationEnabled;
+        private set
+        {
+            if (Set(ref _destinationEnabled, value))
+            {
+                OnPropertyChanged(nameof(DestinationButtonText));
+            }
+        }
+    }
+
+    public string DestinationButtonText => DestinationEnabled ? "Turn off simulated destination" : "Turn on simulated destination";
 
     public ICommand SavePrinterCommand { get; }
     public ICommand TestPrintCommand { get; }
@@ -49,6 +75,10 @@ public sealed class SettingsViewModel : PageViewModel
     public ICommand LoadSampleCommand { get; }
     public ICommand BackupCommand { get; }
     public ICommand SaveShiftPolicyCommand { get; }
+    public ICommand RefreshSyncCommand { get; }
+    public ICommand RunSyncNowCommand { get; }
+    public ICommand RetryFailedCommand { get; }
+    public ICommand ToggleDestinationCommand { get; }
 
     /// <summary>B-03: off by default until the business confirms its shift procedure (D-08).</summary>
     public bool RequireShift { get => _requireShift; set => Set(ref _requireShift, value); }
@@ -64,6 +94,81 @@ public sealed class SettingsViewModel : PageViewModel
         SelectedPrinter ??= Printers.FirstOrDefault(p => p.Contains("PDF", StringComparison.OrdinalIgnoreCase)) ?? Printers.FirstOrDefault();
         RequireShift = await Services.Shifts.IsShiftRequiredAsync();
         await RefreshProfilesAsync();
+        if (CanViewSync)
+        {
+            await RefreshSyncAsync();
+        }
+    }
+
+    private async Task RefreshSyncAsync()
+    {
+        var result = await Services.Sync.GetStatusAsync(Session);
+        if (!Check(result))
+        {
+            return;
+        }
+
+        var s = result.Value!;
+        DestinationEnabled = s.DestinationEnabled;
+        var b = s.Backup;
+        var lines = new List<string>
+        {
+            "Destination: " + (s.Provider is null ? "none connected (files are kept on this PC)" : $"{s.DestinationLabel} — {(s.DestinationEnabled ? "on" : "off")}"),
+            $"Files waiting to be written: {s.AwaitingFile}" + (s.HeldArtifacts > 0 ? $" · held for review: {s.HeldArtifacts}" : string.Empty),
+            $"Uploads: {s.Pending} waiting, {s.InProgress} in progress, {s.Failed} failed, {s.RecoveryHold} on hold, {s.Succeeded} done"
+                + (s.OtherDestination > 0 ? $" ({s.OtherDestination} belong to another destination)" : string.Empty),
+            "Oldest waiting upload: " + (s.OldestPendingUtc is { } o ? Formatting.LocalTime(o) : "none")
+                + " · Last successful upload: " + (s.LastSuccessUtc is { } l ? Formatting.LocalTime(l) : "never"),
+            "Last verified backup: " + (b.LastVerifiedUtc is { } v ? $"{Formatting.LocalTime(v)} ({b.LastBackupFile})" : "none yet")
+                + $" · {b.LocalGenerations} kept on this PC",
+            b.FreeBytes < 0 ? "Free disk space: unknown" : $"Free disk space: {b.FreeBytes / (1024.0 * 1024 * 1024):0.0} GB" + (b.LowSpace ? " — LOW, free some space" : string.Empty),
+        };
+        foreach (var j in s.Jobs)
+        {
+            var name = j.Kind switch { "DailyBackup" => "Daily backup", "DailyReport" => "Daily report (business-day close)", "MonthlyReport" => "Monthly report", _ => j.Kind };
+            lines.Add($"{name}: last done {j.LastCompletedKey ?? "never"}"
+                + (j.WaitingKey is not null ? $"; {j.WaitingKey} is due and runs when an owner or authorized user is signed in" : string.Empty)
+                + (j.LastError is not null ? $"; last error: {j.LastError}" : string.Empty));
+        }
+
+        SyncSummary = string.Join(Environment.NewLine, lines);
+        SyncProblems.Clear();
+        foreach (var p in s.Problems)
+        {
+            SyncProblems.Add($"{p.LogicalKey}: {p.State} — {p.Code}" + (p.Detail is null ? string.Empty : $" ({p.Detail})"));
+        }
+    }
+
+    private async Task RunSyncNowAsync()
+    {
+        var cycle = await Services.Sync.RunCycleAsync();
+        Info = cycle == Application.Sync.SyncCycleResult.Empty ? "Sync run: nothing new to write or upload." : $"Sync run: {cycle.Materialized} file(s) written, {cycle.Enqueued} queued, {cycle.Uploaded} uploaded"
+            + (cycle.Retrying + cycle.Failed + cycle.RecoveryHeld + cycle.Held > 0 ? $", {cycle.Retrying} will retry, {cycle.Failed} failed, {cycle.RecoveryHeld + cycle.Held} held" : string.Empty) + ".";
+        await RefreshSyncAsync();
+    }
+
+    private async Task RetryFailedAsync()
+    {
+        var result = await Services.Sync.RetryFailedAsync(Session);
+        if (Check(result))
+        {
+            Info = result.Value == 0 ? "Nothing to retry." : $"{result.Value} failed upload(s) will be retried with the same file identity.";
+            Services.Background.Nudge();
+            await RefreshSyncAsync();
+        }
+    }
+
+    private async Task ToggleDestinationAsync()
+    {
+        var enable = !DestinationEnabled;
+        if (Check(await Services.Sync.SetSimulatedDestinationAsync(Session, enable)))
+        {
+            Info = enable
+                ? "Simulated destination on: files are copied to the simulated-drive folder in the data folder. No Google account is used."
+                : "Simulated destination off. Files keep being written on this PC and wait in the queue.";
+            Services.Background.Nudge();
+            await RefreshSyncAsync();
+        }
     }
 
     private async Task RefreshProfilesAsync()
@@ -152,7 +257,12 @@ public sealed class SettingsViewModel : PageViewModel
         var result = await Services.Backups.CreateBackupAsync(Session);
         if (Check(result))
         {
-            Info = $"Backup verified and saved to {result.Value!.Folder}";
+            Info = $"Backup verified and saved to {result.Value!.PackagePath}"
+                + (result.Value.Pruned > 0 ? $" ({result.Value.Pruned} older backup(s) removed; at least seven are kept)." : ".");
+            if (CanViewSync)
+            {
+                await RefreshSyncAsync();
+            }
         }
     }
 }

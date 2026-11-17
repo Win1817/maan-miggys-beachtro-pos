@@ -67,6 +67,15 @@ internal static class OperationsModel
             b.Fk<ArtifactRecord, Backup>(x => x.BackupId);
         });
 
+        mb.Entity<ArtifactHold>(b =>
+        {
+            b.ToTable("ArtifactHolds", t => t
+                .Check("Code", NotBlank("Code"))
+                .Check("Resolved", """ "ResolvedUtc" IS NULL OR "ResolvedUtc" >= "DetectedUtc" """));
+            b.HasKey(x => x.ArtifactId);
+            b.Fk<ArtifactHold, ArtifactRecord>(x => x.ArtifactId);
+        });
+
         mb.Entity<SyncQueueItem>(b =>
         {
             b.ToTable("SyncQueue", t => t
