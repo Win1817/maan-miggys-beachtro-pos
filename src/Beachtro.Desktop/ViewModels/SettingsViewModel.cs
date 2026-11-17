@@ -9,14 +9,13 @@ using Beachtro.Domain.Model;
 namespace Beachtro.Desktop.ViewModels;
 
 /// <summary>
-/// Printer, sample data, backup and a read-only view of the effective profiles and production gate.
-/// Full settings/profile editing is IB-25.
+/// Settings tabs (IB-25): general (printer, shifts, sample data), business and tax/calendar profiles
+/// (<see cref="ProfilesViewModel"/>), and backup and sync status.
 /// </summary>
 public sealed class SettingsViewModel : PageViewModel
 {
     private string? _selectedPrinter;
     private PrintJobStatus? _testJob;
-    private string _profileSummary = string.Empty;
     private string _testPreview = string.Empty;
     private bool _requireShift;
     private string _syncSummary = string.Empty;
@@ -35,14 +34,16 @@ public sealed class SettingsViewModel : PageViewModel
         RunSyncNowCommand = Command(_ => RunSyncNowAsync());
         RetryFailedCommand = Command(_ => RetryFailedAsync(), _ => CanRetrySync);
         ToggleDestinationCommand = Command(_ => ToggleDestinationAsync(), _ => CanConfigureSync);
+        Profiles = new ProfilesViewModel(shell);
     }
 
     public override string Title => "Settings";
 
     public ObservableCollection<string> Printers { get; } = [];
-    public ObservableCollection<string> Blockers { get; } = [];
+    public ProfilesViewModel Profiles { get; }
+    public bool CanViewProfiles => Services.Sessions.Current?.Has(Capabilities.SettingsOperational) ?? false;
+    public bool CanSeeBackupTab => CanBackup || CanViewSync;
     public string? SelectedPrinter { get => _selectedPrinter; set => Set(ref _selectedPrinter, value); }
-    public string ProfileSummary { get => _profileSummary; private set => Set(ref _profileSummary, value); }
     public string TestPreview { get => _testPreview; private set => Set(ref _testPreview, value); }
     public bool IsTestProfile => Shell.IsTestProfile;
     public bool CanConfigurePrinter => Services.Sessions.Current?.Has(Capabilities.SettingsOperational) ?? false;
@@ -93,7 +94,11 @@ public sealed class SettingsViewModel : PageViewModel
 
         SelectedPrinter ??= Printers.FirstOrDefault(p => p.Contains("PDF", StringComparison.OrdinalIgnoreCase)) ?? Printers.FirstOrDefault();
         RequireShift = await Services.Shifts.IsShiftRequiredAsync();
-        await RefreshProfilesAsync();
+        if (CanViewProfiles)
+        {
+            await Profiles.LoadAsync();
+        }
+
         if (CanViewSync)
         {
             await RefreshSyncAsync();
@@ -171,30 +176,6 @@ public sealed class SettingsViewModel : PageViewModel
         }
     }
 
-    private async Task RefreshProfilesAsync()
-    {
-        var now = Services.Clock.UtcNowMilliseconds;
-        var calc = await Services.Profiles.GetEffectiveCalculationProfileAsync(now);
-        var calendar = await Services.Profiles.GetEffectiveCalendarProfileAsync(now);
-        var lines = new List<string>
-        {
-            calc.IsSuccess
-                ? $"Calculation profile: revision {calc.Value!.Profile.Revision} ({calc.Value.Profile.ApprovalState}), {calc.Value.Profile.Currency.Code}, tax entries: "
-                  + string.Join(", ", calc.Value.TaxRules.Select(r => $"{r.Key} = {r.Value.Treatment}{(r.Value.Components.Count > 0 ? $" {r.Value.Components[0].RatePpm / 10_000m:0.##}%" : string.Empty)}"))
-                : "Calculation profile: none in effect",
-            calendar.IsSuccess
-                ? $"Calendar: {calendar.Value!.Policy.TimeZoneId}, business day starts {TimeSpan.FromMinutes(calendar.Value.Policy.CutoffMinute):hh\\:mm} ({calendar.Value.ApprovalState})"
-                : "Calendar: none in effect",
-        };
-        ProfileSummary = string.Join(Environment.NewLine, lines);
-
-        Blockers.Clear();
-        foreach (var b in (await Services.Profiles.GetProductionReadinessAsync()).Blockers)
-        {
-            Blockers.Add(b);
-        }
-    }
-
     private async Task SavePrinterAsync()
     {
         if (Check(await Services.Profiles.SetOperationalSettingAsync(Session, OperationalSettingKeys.PrinterName, JsonSerializer.Serialize(SelectedPrinter))))
@@ -239,7 +220,6 @@ public sealed class SettingsViewModel : PageViewModel
         if (Check(result))
         {
             Info = $"Sample data loaded: {result.Value!.ProfilesCreated} profile(s), {result.Value.ProductsCreated} product(s). All marked TEST.";
-            await RefreshProfilesAsync();
             await Shell.EnterMainAsync();
         }
     }

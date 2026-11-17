@@ -587,29 +587,8 @@ public sealed class IdentityService(
                where r.Key == RoleTemplates.Owner && u.IsActive && u.Id != excludingUserId
                select u.Id).CountAsync(cancellationToken).ConfigureAwait(false);
 
-    /// <summary>
-    /// Delegation rule (security design matrix, users.manage): only a holder of roles.manage (Owner)
-    /// may touch an account holding the Owner role or grant/remove it; otherwise an actor may only
-    /// grant, remove or administer roles whose capabilities it holds itself.
-    /// </summary>
-    /// <param name="accountRoles">Roles the target account has before and after the change.</param>
-    /// <param name="rolesToManage">Roles being granted/removed, or the account's roles for reset/activation.</param>
-    private static string? CheckDelegation(UserSession actor, IEnumerable<string> accountRoles, IEnumerable<string> rolesToManage)
-    {
-        var manage = rolesToManage.ToArray();
-        if (accountRoles.Concat(manage).Contains(RoleTemplates.Owner, StringComparer.Ordinal) && !actor.Has(Capabilities.RolesManage))
-        {
-            return "Only an Owner can manage Owner accounts or the Owner role.";
-        }
-
-        var missing = manage
-            .Where(RoleTemplates.Grants.ContainsKey)
-            .SelectMany(k => RoleTemplates.Grants[k])
-            .Where(c => !actor.Has(c))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        return missing.Length == 0 ? null : "You cannot manage roles with permissions you do not hold yourself.";
-    }
+    private static string? CheckDelegation(UserSession actor, IEnumerable<string> accountRoles, IEnumerable<string> rolesToManage) =>
+        RoleDelegation.Check(actor, accountRoles, rolesToManage);
 
     private static string? ValidateRoleKeys(IReadOnlyCollection<string>? roleKeys)
     {

@@ -3,6 +3,7 @@ using Beachtro.Application.Security;
 using Beachtro.Domain.Calendar;
 using Beachtro.Domain.Financial;
 using Beachtro.Domain.Financial.Calculation;
+using Beachtro.Domain.Model;
 
 namespace Beachtro.Application.Configuration;
 
@@ -47,6 +48,44 @@ public sealed record EffectiveCalculationProfile(
 
 public sealed record EffectiveCalendarProfile(Guid PolicyId, int Revision, ProfileApprovalState ApprovalState, CalendarPolicy Policy);
 
+/// <summary>One calculation or calendar revision as stored (Draft included). Taxes are empty for calendar revisions.</summary>
+public sealed record ProfileRevisionView(
+    Guid Id,
+    PolicyKind Kind,
+    int Revision,
+    ProfileApprovalState ApprovalState,
+    long EffectiveFromUtc,
+    long? EffectiveToUtc,
+    string? CurrencyCode,
+    IReadOnlyList<TaxConfigurationDraft> Taxes,
+    string? TimeZoneId,
+    int? CutoffMinute,
+    string? EvidenceReference,
+    string PayloadSha256,
+    long CreatedUtc);
+
+public sealed record BusinessProfileView(
+    Guid Id,
+    int Revision,
+    ProfileApprovalState ApprovalState,
+    string RegisteredName,
+    string Address,
+    string? Contact,
+    string? TaxIdentifier,
+    int TemplateVersion,
+    string? EvidenceReference,
+    long CreatedUtc,
+    bool IsCurrent);
+
+/// <summary>Every revision, newest first, for the settings history and effective-profile preview.</summary>
+public sealed record ProfileHistory(
+    IReadOnlyList<ProfileRevisionView> Calculation,
+    IReadOnlyList<ProfileRevisionView> Calendar,
+    IReadOnlyList<BusinessProfileView> Business)
+{
+    public BusinessProfileView? CurrentBusiness => Business.FirstOrDefault(b => b.IsCurrent);
+}
+
 public sealed record ProductionReadiness(IReadOnlyList<string> Blockers)
 {
     public bool IsReady => Blockers.Count == 0;
@@ -67,6 +106,9 @@ public interface IProfileService
     Task<Result<EffectiveCalculationProfile>> GetEffectiveCalculationProfileAsync(long atUtc, CancellationToken cancellationToken = default);
 
     Task<Result<EffectiveCalendarProfile>> GetEffectiveCalendarProfileAsync(long atUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>Read-only revision history (settings.operational). Saving still needs settings.financial.</summary>
+    Task<Result<ProfileHistory>> GetProfileHistoryAsync(UserSession session, CancellationToken cancellationToken = default);
 
     Task<ProductionReadiness> GetProductionReadinessAsync(CancellationToken cancellationToken = default);
 

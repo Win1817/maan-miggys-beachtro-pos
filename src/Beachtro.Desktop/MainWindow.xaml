@@ -31,6 +31,7 @@
                     <Button Content="Reports" Style="{StaticResource Nav}" Command="{Binding ShowReports}" />
                     <Button Content="Products" Style="{StaticResource Nav}" Command="{Binding ShowProducts}" />
                     <Button Content="Inventory" Style="{StaticResource Nav}" Command="{Binding ShowInventory}" />
+                    <Button Content="Users" Style="{StaticResource Nav}" Command="{Binding ShowUsers}" />
                     <Button Content="Settings" Style="{StaticResource Nav}" Command="{Binding ShowSettings}" />
                 </StackPanel>
             </DockPanel>

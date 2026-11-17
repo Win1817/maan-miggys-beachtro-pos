@@ -33,6 +33,7 @@ public sealed class ShellViewModel : ObservableObject
         ShowInventory = new RelayCommand(_ => Navigate(new InventoryViewModel(this)), _ => Can(Capabilities.InventoryAdjust));
         ShowSettings = new RelayCommand(_ => Navigate(new SettingsViewModel(this)),
             _ => Can(Capabilities.SettingsOperational) || Can(Capabilities.SettingsFinancial) || Can(Capabilities.BackupCreateVerify));
+        ShowUsers = new RelayCommand(_ => Navigate(new UsersViewModel(this)), _ => Can(Capabilities.UsersManage));
         LockCommand = new RelayCommand(_ => Lock(), _ => IsSignedIn && CurrentPage is not LockViewModel);
         SignOutCommand = new RelayCommand(_ => SignOut(null), _ => IsSignedIn);
 
@@ -81,6 +82,7 @@ public sealed class ShellViewModel : ObservableObject
     public ICommand ShowProducts { get; }
     public ICommand ShowInventory { get; }
     public ICommand ShowSettings { get; }
+    public ICommand ShowUsers { get; }
     public ICommand LockCommand { get; }
     public ICommand SignOutCommand { get; }
 
@@ -115,10 +117,15 @@ public sealed class ShellViewModel : ObservableObject
         await EnterMainAsync();
     }
 
-    internal async Task EnterMainAsync()
+    internal async Task RefreshBusinessDateAsync()
     {
         var calendar = await Services.Profiles.GetEffectiveCalendarProfileAsync(Services.Clock.UtcNowMilliseconds);
         BusinessDate = calendar.IsSuccess ? "Business date " + calendar.Value!.Policy.BusinessDateFor(Services.Clock.UtcNowMilliseconds) : "No calendar profile";
+    }
+
+    internal async Task EnterMainAsync()
+    {
+        await RefreshBusinessDateAsync();
 
         var session = Services.Sessions.Current!;
         if (session.Has(Capabilities.PosSell))

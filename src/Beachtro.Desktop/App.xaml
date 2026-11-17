@@ -24,6 +24,7 @@
         <v:UnitsConverter x:Key="Units" />
         <v:LocalTimeConverter x:Key="LocalTime" />
         <v:PresentToVisibilityConverter x:Key="Visible" />
+        <v:NotConverter x:Key="Not" />
         <vm:PasswordBoxesConverter x:Key="PasswordBoxes" />
 
         <Style TargetType="TextBlock">
@@ -93,7 +94,14 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ContentPresenter.Resources>
+                                    <!-- The app-wide TextBlock style would otherwise force dark ink on white-on-colour buttons. -->
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -176,5 +184,6 @@
         <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><v:DashboardView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:ReportsViewModel}"><v:ReportsView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:ShiftsViewModel}"><v:ShiftsView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:UsersViewModel}"><v:UsersView /></DataTemplate>
     </Application.Resources>
 </Application>

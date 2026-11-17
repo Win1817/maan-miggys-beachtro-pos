@@ -1,8 +1,212 @@
 <UserControl x:Class="Beachtro.Desktop.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ScrollViewer Background="{StaticResource Page}" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="16" MaxWidth="900" HorizontalAlignment="Left">
+    <UserControl.Resources>
+        <DataTemplate x:Key="ProfileMessages">
+            <StackPanel>
+                <Border Style="{StaticResource ErrorBox}" Visibility="{Binding Error, Converter={StaticResource Visible}}" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" />
+                </Border>
+                <Border Style="{StaticResource InfoBox}" Visibility="{Binding Info, Converter={StaticResource Visible}}" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding Info}" TextWrapping="Wrap" />
+                </Border>
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="Lines">
+            <ItemsControl ItemsSource="{Binding}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,3" FontFamily="Consolas" FontSize="12.5" /></DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BusinessTab">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,12,0,0" MaxWidth="900" HorizontalAlignment="Left">
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ProfileMessages}" Focusable="False" />
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Business profile (printed on receipts)" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Text="{Binding CurrentBusiness}" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Each save is a new revision. Receipts already issued keep the details they were printed with. In the Test profile the name must contain TEST, and no real tax identifier is entered." />
+                            <StackPanel IsEnabled="{Binding CanEditFinancial}">
+                                <TextBlock Text="Registered name" Style="{StaticResource Label}" />
+                                <TextBox Text="{Binding BizName, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Registered name" />
+                                <TextBlock Text="Address" Style="{StaticResource Label}" />
+                                <TextBox Text="{Binding BizAddress, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Address" />
+                                <TextBlock Text="Contact (optional)" Style="{StaticResource Label}" />
+                                <TextBox Text="{Binding BizContact, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Contact" />
+                                <TextBlock Text="Tax identifier (optional; leave blank while testing)" Style="{StaticResource Label}" />
+                                <TextBox Text="{Binding BizTaxId, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Tax identifier" />
+                                <TextBlock Text="Approval state" Style="{StaticResource Label}" />
+                                <ComboBox ItemsSource="{Binding States}" SelectedItem="{Binding BizState}" Width="160" HorizontalAlignment="Left" AutomationProperties.Name="Business approval state" />
+                                <TextBlock Text="Approval evidence reference (optional for Test; required for Approved)" Style="{StaticResource Label}" />
+                                <TextBox Text="{Binding BizEvidence, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Business evidence" />
+                                <TextBlock Text="Confirm with your password" Style="{StaticResource Label}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <PasswordBox x:Name="BizPassword" Width="260" Margin="0,0,8,0" AutomationProperties.Name="Password for business profile" />
+                                    <Button Content="Save business profile" Style="{StaticResource Primary}" Command="{Binding SaveBusinessCommand}" CommandParameter="{Binding ElementName=BizPassword}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource Hint}" Text="Only an Owner can change the business profile." Visibility="{Binding CanEditFinancial, Converter={StaticResource Visible}, ConverterParameter=invert}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Business profile history" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <ContentControl Content="{Binding BusinessHistory}" ContentTemplate="{StaticResource Lines}" Focusable="False" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TaxTab">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,12,0,0" MaxWidth="980" HorizontalAlignment="Left">
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ProfileMessages}" Focusable="False" />
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Profiles in effect at a chosen time" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}" Text="{Binding ZoneNote}" />
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBox Text="{Binding AtText, UpdateSourceTrigger=PropertyChanged}" Width="180" Margin="0,0,8,0" AutomationProperties.Name="Effective at" />
+                                <Button Content="Show" Command="{Binding ShowEffectiveCommand}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding EffectiveAt}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="New tax (calculation) revision" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Starts from the revision in effect now. Saving never changes past sales; it schedules a new revision. Unknown means the treatment is not confirmed yet: products using it cannot be sold. TestNoTax is for Test data only." />
+                            <Grid Margin="0,6,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="170" /><ColumnDefinition Width="150" /><ColumnDefinition Width="100" /><ColumnDefinition Width="140" /><ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Tax entry key" Style="{StaticResource Label}" Margin="0" />
+                                <TextBlock Grid.Column="1" Text="Treatment" Style="{StaticResource Label}" Margin="0" />
+                                <TextBlock Grid.Column="2" Text="Rate %" Style="{StaticResource Label}" Margin="0" />
+                                <TextBlock Grid.Column="3" Text="Prices are" Style="{StaticResource Label}" Margin="0" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding TaxRows}" IsEnabled="{Binding CanEditFinancial}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="170" /><ColumnDefinition Width="150" /><ColumnDefinition Width="100" /><ColumnDefinition Width="140" /><ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" AutomationProperties.Name="Tax entry key" />
+                                            <ComboBox Grid.Column="1" ItemsSource="{Binding Treatments}" SelectedItem="{Binding Treatment}" Margin="0,0,6,0" AutomationProperties.Name="Treatment" />
+                                            <TextBox Grid.Column="2" Text="{Binding RateText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" AutomationProperties.Name="Rate percent" />
+                                            <ComboBox Grid.Column="3" ItemsSource="{Binding PriceModes}" SelectedItem="{Binding PriceMode}" Margin="0,0,6,0" AutomationProperties.Name="Price mode" />
+                                            <Button Grid.Column="4" Content="Remove" Margin="0"
+                                                    Command="{Binding DataContext.RemoveTaxRowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="Add tax entry" Command="{Binding AddTaxRowCommand}" HorizontalAlignment="Left" Margin="0,6,0,0" IsEnabled="{Binding CanEditFinancial}" />
+
+                            <TextBlock Text="Preview: how a sample price splits under this draft (nothing is saved)" Style="{StaticResource Label}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBox Text="{Binding SamplePriceText, UpdateSourceTrigger=PropertyChanged}" Width="120" Margin="0,0,8,0" AutomationProperties.Name="Sample price" />
+                                <Button Content="Preview" Command="{Binding PreviewCommand}" />
+                            </StackPanel>
+                            <Border BorderBrush="{StaticResource Line}" BorderThickness="1" Background="#FAFAF9" Padding="10" Margin="0,8,0,0">
+                                <ContentControl Content="{Binding PreviewLines}" ContentTemplate="{StaticResource Lines}" Focusable="False" />
+                            </Border>
+
+                            <StackPanel IsEnabled="{Binding CanEditFinancial}">
+                                <WrapPanel Margin="0,10,0,0">
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Text="Approval state" Style="{StaticResource Label}" Margin="0" />
+                                        <ComboBox ItemsSource="{Binding States}" SelectedItem="{Binding CalcState}" Width="140" AutomationProperties.Name="Tax approval state" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,16,0">
+                                        <TextBlock Text="Starts" Style="{StaticResource Label}" Margin="0" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox Content="Now" IsChecked="{Binding CalcStartNow}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBox Text="{Binding CalcStartText, UpdateSourceTrigger=PropertyChanged}" Width="160" AutomationProperties.Name="Tax start time"
+                                                     IsEnabled="{Binding CalcStartNow, Converter={StaticResource Not}}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </WrapPanel>
+                                <TextBlock Text="Approval evidence reference (for example a document name; required for Approved)" Style="{StaticResource Label}" />
+                                <TextBox Text="{Binding CalcEvidence, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Tax evidence" />
+                                <TextBlock Text="Confirm with your password" Style="{StaticResource Label}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <PasswordBox x:Name="CalcPassword" Width="260" Margin="0,0,8,0" AutomationProperties.Name="Password for tax revision" />
+                                    <Button Content="Save tax revision" Style="{StaticResource Primary}" Command="{Binding SaveCalculationCommand}" CommandParameter="{Binding ElementName=CalcPassword}" />
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" Text="Approved is not offered: this build is Test-only until tax treatment is professionally confirmed (milestone 13)." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel IsEnabled="{Binding CanEditFinancial}">
+                            <TextBlock Text="New calendar revision" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}" Text="The time zone and the time each business day starts decide which business date a sale belongs to. Closed days are never moved." />
+                            <WrapPanel>
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="Time zone" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding TimeZoneText, UpdateSourceTrigger=PropertyChanged}" Width="200" AutomationProperties.Name="Time zone" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="Business day starts (HH:mm)" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding CutoffText, UpdateSourceTrigger=PropertyChanged}" Width="100" HorizontalAlignment="Left" AutomationProperties.Name="Business day start" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="Approval state" Style="{StaticResource Label}" />
+                                    <ComboBox ItemsSource="{Binding States}" SelectedItem="{Binding CalState}" Width="140" AutomationProperties.Name="Calendar approval state" />
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Starts" Style="{StaticResource Label}" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox Content="Now" IsChecked="{Binding CalStartNow}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Text="{Binding CalStartText, UpdateSourceTrigger=PropertyChanged}" Width="160" AutomationProperties.Name="Calendar start time"
+                                                 IsEnabled="{Binding CalStartNow, Converter={StaticResource Not}}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </WrapPanel>
+                            <TextBlock Text="Approval evidence reference" Style="{StaticResource Label}" />
+                            <TextBox Text="{Binding CalEvidence, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Calendar evidence" />
+                            <TextBlock Text="Confirm with your password" Style="{StaticResource Label}" />
+                            <StackPanel Orientation="Horizontal">
+                                <PasswordBox x:Name="CalPassword" Width="260" Margin="0,0,8,0" AutomationProperties.Name="Password for calendar revision" />
+                                <Button Content="Save calendar revision" Style="{StaticResource Primary}" Command="{Binding SaveCalendarCommand}" CommandParameter="{Binding ElementName=CalPassword}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Tax revision history" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <ContentControl Content="{Binding CalculationHistory}" ContentTemplate="{StaticResource Lines}" Focusable="False" />
+                            <TextBlock Text="Calendar revision history" Style="{StaticResource Subheading}" />
+                            <ContentControl Content="{Binding CalendarHistory}" ContentTemplate="{StaticResource Lines}" Focusable="False" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Why Production cannot be activated yet" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <ItemsControl ItemsSource="{Binding Blockers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+    </UserControl.Resources>
+    <DockPanel Background="{StaticResource Page}">
+        <StackPanel DockPanel.Dock="Top" Margin="16,16,16,0">
             <TextBlock Text="Settings" Style="{StaticResource Heading}" />
             <Border Style="{StaticResource ErrorBox}" Visibility="{Binding Error, Converter={StaticResource Visible}}" Margin="0,0,0,8">
                 <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" />
@@ -10,92 +214,99 @@
             <Border Style="{StaticResource InfoBox}" Visibility="{Binding Info, Converter={StaticResource Visible}}" Margin="0,0,0,8">
                 <TextBlock Text="{Binding Info}" TextWrapping="Wrap" />
             </Border>
-
-            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanConfigurePrinter, Converter={StaticResource Visible}}">
-                <StackPanel>
-                    <TextBlock Text="Receipt printer" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                    <TextBlock Style="{StaticResource Hint}" Text="Choose an installed Windows printer. For testing, use Microsoft Print to PDF (Windows asks where to save each receipt)." />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" Width="360" Margin="0,0,8,0" />
-                        <Button Content="Save" Command="{Binding SavePrinterCommand}" />
-                        <Button Content="Print test page" Command="{Binding TestPrintCommand}" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Content="Test page printed OK" Command="{Binding ConfirmTestCommand}" CommandParameter="True" MinHeight="34" Padding="10,4" />
-                        <Button Content="It did not print" Command="{Binding ConfirmTestCommand}" CommandParameter="False" MinHeight="34" Padding="10,4" />
-                    </StackPanel>
-                    <Border BorderBrush="{StaticResource Line}" BorderThickness="1" Background="#FAFAF9" Padding="12" Margin="0,10,0,0" HorizontalAlignment="Left"
-                            Visibility="{Binding TestPreview, Converter={StaticResource Visible}}">
-                        <TextBlock Text="{Binding TestPreview}" FontFamily="Consolas" FontSize="12" />
-                    </Border>
-                </StackPanel>
-            </Border>
-
-            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanConfigurePrinter, Converter={StaticResource Visible}}">
-                <StackPanel>
-                    <TextBlock Text="Shifts" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                    <TextBlock Style="{StaticResource Hint}"
-                               Text="Off by default. Turn on only once the business has agreed how cashiers open, count and close the drawer." />
-                    <CheckBox Content="Require an open shift before selling" IsChecked="{Binding RequireShift}" />
-                    <Button Content="Save" Command="{Binding SaveShiftPolicyCommand}" HorizontalAlignment="Left" />
-                </StackPanel>
-            </Border>
-
-            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Background="#FFFBEB" BorderBrush="#FCD34D"
-                    Visibility="{Binding CanLoadSample, Converter={StaticResource Visible}}">
-                <StackPanel>
-                    <TextBlock Text="Sample data (Test profile only)" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                    <TextBlock Style="{StaticResource Hint}"
-                               Text="Loads Test tax and calendar profiles, a TEST business name and six sample products with stock, so you can try selling. Nothing here is real business, tax or price data. Safe to run again." />
-                    <TextBlock Text="Confirm with your password" Style="{StaticResource Label}" />
-                    <StackPanel Orientation="Horizontal">
-                        <PasswordBox x:Name="SamplePassword" Width="260" Margin="0,0,8,0" />
-                        <Button Content="Load sample data" Command="{Binding LoadSampleCommand}" CommandParameter="{Binding ElementName=SamplePassword}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanBackup, Converter={StaticResource Visible}}">
-                <StackPanel>
-                    <TextBlock Text="Backup" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                    <TextBlock Style="{StaticResource Hint}" Text="Creates one verified .zip package (database copy, number and upload journals, checksums) in the local backups folder. A backup also runs automatically once per business day while an owner or administrator is signed in. At least seven are kept; a backup still waiting to upload is never removed." />
-                    <Button Content="Back up now" Command="{Binding BackupCommand}" Margin="0,8,0,0" HorizontalAlignment="Left" />
-                </StackPanel>
-            </Border>
-
-            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanViewSync, Converter={StaticResource Visible}}">
-                <StackPanel>
-                    <TextBlock Text="Backup and sync status" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                    <TextBlock Style="{StaticResource Hint}" Text="Every sale, refund, closed day and backup becomes a file in the artifacts folder, then waits to be copied off this PC. Google Drive is not connected yet; in the Test profile a simulated destination folder stands in for it." />
-                    <TextBlock Text="{Binding SyncSummary}" TextWrapping="Wrap" Margin="0,8,0,0" FontFamily="Consolas" FontSize="13" />
-                    <ItemsControl ItemsSource="{Binding SyncProblems}" Margin="0,6,0,0">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" Foreground="{StaticResource Danger}" Margin="0,2" /></DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <WrapPanel Margin="0,8,0,0">
-                        <Button Content="Refresh" Command="{Binding RefreshSyncCommand}" Margin="0,0,8,8" />
-                        <Button Content="Run now" Command="{Binding RunSyncNowCommand}" Margin="0,0,8,8" />
-                        <Button Content="Retry failed uploads" Command="{Binding RetryFailedCommand}" Margin="0,0,8,8"
-                                Visibility="{Binding CanRetrySync, Converter={StaticResource Visible}}" />
-                        <Button Content="{Binding DestinationButtonText}" Command="{Binding ToggleDestinationCommand}" Margin="0,0,8,8"
-                                Visibility="{Binding CanConfigureSync, Converter={StaticResource Visible}}" />
-                    </WrapPanel>
-                </StackPanel>
-            </Border>
-
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="Profiles in effect" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                    <TextBlock Text="{Binding ProfileSummary}" TextWrapping="Wrap" />
-                    <TextBlock Text="Why Production cannot be activated yet" Style="{StaticResource Subheading}" />
-                    <ItemsControl ItemsSource="{Binding Blockers}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
         </StackPanel>
-    </ScrollViewer>
+        <TabControl Margin="16,0,16,16" Padding="0" Background="{StaticResource Page}">
+            <TabItem Header="General">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" MaxWidth="900" HorizontalAlignment="Left">
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanConfigurePrinter, Converter={StaticResource Visible}}">
+                        <StackPanel>
+                            <TextBlock Text="Receipt printer" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Choose an installed Windows printer. For testing, use Microsoft Print to PDF (Windows asks where to save each receipt)." />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" Width="360" Margin="0,0,8,0" />
+                                <Button Content="Save" Command="{Binding SavePrinterCommand}" />
+                                <Button Content="Print test page" Command="{Binding TestPrintCommand}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="Test page printed OK" Command="{Binding ConfirmTestCommand}" CommandParameter="True" MinHeight="34" Padding="10,4" />
+                                <Button Content="It did not print" Command="{Binding ConfirmTestCommand}" CommandParameter="False" MinHeight="34" Padding="10,4" />
+                            </StackPanel>
+                            <Border BorderBrush="{StaticResource Line}" BorderThickness="1" Background="#FAFAF9" Padding="12" Margin="0,10,0,0" HorizontalAlignment="Left"
+                                    Visibility="{Binding TestPreview, Converter={StaticResource Visible}}">
+                                <TextBlock Text="{Binding TestPreview}" FontFamily="Consolas" FontSize="12" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanConfigurePrinter, Converter={StaticResource Visible}}">
+                        <StackPanel>
+                            <TextBlock Text="Shifts" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="Off by default. Turn on only once the business has agreed how cashiers open, count and close the drawer." />
+                            <CheckBox Content="Require an open shift before selling" IsChecked="{Binding RequireShift}" />
+                            <Button Content="Save" Command="{Binding SaveShiftPolicyCommand}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12" Background="#FFFBEB" BorderBrush="#FCD34D"
+                            Visibility="{Binding CanLoadSample, Converter={StaticResource Visible}}">
+                        <StackPanel>
+                            <TextBlock Text="Sample data (Test profile only)" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="Loads Test tax and calendar profiles, a TEST business name and six sample products with stock, so you can try selling. Nothing here is real business, tax or price data. Safe to run again." />
+                            <TextBlock Text="Confirm with your password" Style="{StaticResource Label}" />
+                            <StackPanel Orientation="Horizontal">
+                                <PasswordBox x:Name="SamplePassword" Width="260" Margin="0,0,8,0" />
+                                <Button Content="Load sample data" Command="{Binding LoadSampleCommand}" CommandParameter="{Binding ElementName=SamplePassword}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Business" Visibility="{Binding CanViewProfiles, Converter={StaticResource Visible}}">
+                <ContentControl Content="{Binding Profiles}" ContentTemplate="{StaticResource BusinessTab}" Focusable="False" />
+            </TabItem>
+            <TabItem Header="Tax and calendar" Visibility="{Binding CanViewProfiles, Converter={StaticResource Visible}}">
+                <ContentControl Content="{Binding Profiles}" ContentTemplate="{StaticResource TaxTab}" Focusable="False" />
+            </TabItem>
+            <TabItem Header="Backup and sync" Visibility="{Binding CanSeeBackupTab, Converter={StaticResource Visible}}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" MaxWidth="900" HorizontalAlignment="Left">
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanBackup, Converter={StaticResource Visible}}">
+                        <StackPanel>
+                            <TextBlock Text="Backup" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Creates one verified .zip package (database copy, number and upload journals, checksums) in the local backups folder. A backup also runs automatically once per business day while an owner or administrator is signed in. At least seven are kept; a backup still waiting to upload is never removed." />
+                            <Button Content="Back up now" Command="{Binding BackupCommand}" Margin="0,8,0,0" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding CanViewSync, Converter={StaticResource Visible}}">
+                        <StackPanel>
+                            <TextBlock Text="Backup and sync status" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Every sale, refund, closed day and backup becomes a file in the artifacts folder, then waits to be copied off this PC. Google Drive is not connected yet; in the Test profile a simulated destination folder stands in for it." />
+                            <TextBlock Text="{Binding SyncSummary}" TextWrapping="Wrap" Margin="0,8,0,0" FontFamily="Consolas" FontSize="13" />
+                            <ItemsControl ItemsSource="{Binding SyncProblems}" Margin="0,6,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" Foreground="{StaticResource Danger}" Margin="0,2" /></DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button Content="Refresh" Command="{Binding RefreshSyncCommand}" Margin="0,0,8,8" />
+                                <Button Content="Run now" Command="{Binding RunSyncNowCommand}" Margin="0,0,8,8" />
+                                <Button Content="Retry failed uploads" Command="{Binding RetryFailedCommand}" Margin="0,0,8,8"
+                                        Visibility="{Binding CanRetrySync, Converter={StaticResource Visible}}" />
+                                <Button Content="{Binding DestinationButtonText}" Command="{Binding ToggleDestinationCommand}" Margin="0,0,8,8"
+                                        Visibility="{Binding CanConfigureSync, Converter={StaticResource Visible}}" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
 </UserControl>

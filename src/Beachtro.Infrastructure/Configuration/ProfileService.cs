@@ -192,6 +192,50 @@ public sealed class ProfileService(
         return Result<EffectiveCalendarProfile>.Ok(new EffectiveCalendarProfile(policy.Id, policy.Revision, policy.ApprovalState, new CalendarPolicy(timeZoneId, cutoff)));
     }
 
+    public async Task<Result<ProfileHistory>> GetProfileHistoryAsync(UserSession session, CancellationToken cancellationToken = default)
+    {
+        var auth = await identity.AuthorizeAsync(session, Capabilities.SettingsOperational, false, cancellationToken).ConfigureAwait(false);
+        if (!auth.IsSuccess)
+        {
+            return auth.As<ProfileHistory>();
+        }
+
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var policies = await db.PolicyVersions.AsNoTracking()
+            .Where(p => p.Kind == PolicyKind.Calculation || p.Kind == PolicyKind.Calendar)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var taxes = (await db.TaxConfigurations.AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false))
+            .ToLookup(t => t.PolicyVersionId);
+
+        ProfileRevisionView View(PolicyVersion p)
+        {
+            if (p.Kind == PolicyKind.Calendar)
+            {
+                var (zone, cutoff) = ProfilePayloads.ReadCalendar(p.CanonicalPayloadJson);
+                return new ProfileRevisionView(p.Id, p.Kind, p.Revision, p.ApprovalState, p.EffectiveFromUtc, p.EffectiveToUtc, null, [], zone, cutoff,
+                    p.EvidenceReference, p.PayloadSha256, p.CreatedUtc);
+            }
+
+            var (_, currency) = ProfilePayloads.ReadCalculation(p.CanonicalPayloadJson);
+            var entries = taxes[p.Id].OrderBy(t => t.TaxKey, StringComparer.Ordinal)
+                .Select(t => new TaxConfigurationDraft(t.TaxKey, t.RatePpm, t.PriceMode, t.TreatmentCode)).ToArray();
+            return new ProfileRevisionView(p.Id, p.Kind, p.Revision, p.ApprovalState, p.EffectiveFromUtc, p.EffectiveToUtc, currency.Code, entries, null, null,
+                p.EvidenceReference, p.PayloadSha256, p.CreatedUtc);
+        }
+
+        var currentBusiness = await db.InstallationState.AsNoTracking().Select(s => s.CurrentBusinessProfileId).SingleAsync(cancellationToken).ConfigureAwait(false);
+        var business = (await db.BusinessProfiles.AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false))
+            .OrderByDescending(b => b.Revision)
+            .Select(b => new BusinessProfileView(b.Id, b.Revision, b.ApprovalState, b.RegisteredName, b.Address, b.Contact, b.TaxIdentifier, b.TemplateVersion,
+                b.EvidenceReference, b.CreatedUtc, b.Id == currentBusiness))
+            .ToArray();
+
+        return Result<ProfileHistory>.Ok(new ProfileHistory(
+            policies.Where(p => p.Kind == PolicyKind.Calculation).OrderByDescending(p => p.Revision).Select(View).ToArray(),
+            policies.Where(p => p.Kind == PolicyKind.Calendar).OrderByDescending(p => p.Revision).Select(View).ToArray(),
+            business));
+    }
+
     public async Task<ProductionReadiness> GetProductionReadinessAsync(CancellationToken cancellationToken = default)
     {
         var now = clock.UtcNowMilliseconds;
