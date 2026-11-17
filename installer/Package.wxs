@@ -1,0 +1,39 @@
+<!--
+  Beachtro POS installer (IB-27, POS-DEC-011).
+  - Per-machine install of the self-contained app into Program Files; offline; no service, no auto-updater.
+  - A newer package replaces an older one; installing an older one over a newer one is refused.
+  - The data folder (%LocalAppData%\BeachtroPOS*) is never installed, changed or removed by this package,
+    so uninstalling keeps every sale, backup and journal.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Beachtro POS"
+           Manufacturer="Ma'an and Miggy's Beachtro"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="5B740B33-5790-47BF-A739-88B8E3F6FE7F"
+           Scope="perMachine"
+           Compressed="yes">
+    <SummaryInformation Description="Beachtro POS point of sale" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Beachtro POS is already installed. To go back to an older version, uninstall the newer one first (your shop data is kept), then install the older version." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Beachtro POS" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="MenuFolder" Name="Beachtro POS" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Beachtro POS">
+      <Files Directory="INSTALLFOLDER" Include="$(var.PublishDir)**" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+
+    <Component Id="StartMenu" Directory="MenuFolder">
+      <Shortcut Id="AppShortcut" Name="Beachtro POS" Target="[INSTALLFOLDER]BeachtroPOS.exe" WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="MaintenanceShortcut" Name="Beachtro POS Maintenance" Description="Owner maintenance (run as administrator)"
+                Target="[INSTALLFOLDER]BeachtroPOS.exe" Arguments="--maintenance" WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveMenuFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\Beachtro POS" Name="StartMenuShortcuts" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+  </Package>
+</Wix>

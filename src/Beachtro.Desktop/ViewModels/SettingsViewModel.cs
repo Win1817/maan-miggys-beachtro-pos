@@ -126,6 +126,9 @@ public sealed class SettingsViewModel : PageViewModel
                 + " · Last successful upload: " + (s.LastSuccessUtc is { } l ? Formatting.LocalTime(l) : "never"),
             "Last verified backup: " + (b.LastVerifiedUtc is { } v ? $"{Formatting.LocalTime(v)} ({b.LastBackupFile})" : "none yet")
                 + $" · {b.LocalGenerations} kept on this PC",
+            Infrastructure.Runtime.DataFolderSecurity.Check(Services.Paths.Root) is { IsPrivate: true }
+                ? $"Data folder: private to this Windows account ({Services.Paths.Root})"
+                : "Data folder: NOT private — " + string.Join(" ", Infrastructure.Runtime.DataFolderSecurity.Check(Services.Paths.Root).Problems),
             b.FreeBytes < 0 ? "Free disk space: unknown" : $"Free disk space: {b.FreeBytes / (1024.0 * 1024 * 1024):0.0} GB" + (b.LowSpace ? " — LOW, free some space" : string.Empty),
         };
         foreach (var j in s.Jobs)

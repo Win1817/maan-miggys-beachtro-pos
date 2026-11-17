@@ -1,0 +1,30 @@
+<Window x:Class="Beachtro.Desktop.MaintenanceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Beachtro POS — Maintenance" Height="620" Width="760" WindowStartupLocation="CenterScreen" Background="{StaticResource Page}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20">
+            <TextBlock Text="Maintenance" Style="{StaticResource Heading}" />
+            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                       Text="Local maintenance for the shop owner. Use only when the normal screens cannot help, for example when the last Owner's password is lost. Every action first makes a verified backup and is recorded in the audit log with your Windows account." />
+            <Border Style="{StaticResource Card}" Margin="0,12,0,12">
+                <TextBlock x:Name="StatusText" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13" />
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel x:Name="ResetPanel">
+                    <TextBlock Text="Reset an Owner password" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                               Text="Creates a temporary password, shown once, that must be changed at the next sign-in. Everyone is signed out. Needs Windows administrator rights (right-click, Run as administrator)." />
+                    <TextBlock Text="Owner username" Style="{StaticResource Label}" />
+                    <TextBox x:Name="Username" AutomationProperties.Name="Owner username" />
+                    <CheckBox x:Name="Confirmed" Content="I am the business owner, or am acting for them, and I am at this PC." Margin="0,10,0,0" />
+                    <Button x:Name="ResetButton" Content="Back up, then reset the password" Style="{StaticResource DangerButton}" Margin="0,10,0,0"
+                            HorizontalAlignment="Left" Click="OnReset" />
+                    <TextBlock x:Name="Message" TextWrapping="Wrap" Margin="0,10,0,0" />
+                    <TextBox x:Name="Temporary" IsReadOnly="True" FontFamily="Consolas" FontSize="18" Visibility="Collapsed" Margin="0,6,0,0"
+                             AutomationProperties.Name="Temporary password" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

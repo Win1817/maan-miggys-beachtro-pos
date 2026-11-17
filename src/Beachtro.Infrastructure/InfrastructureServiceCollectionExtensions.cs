@@ -25,7 +25,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<Application.Catalog.ICatalogService, Catalog.CatalogService>();
         services.AddSingleton<Application.Sales.ICheckoutService, Sales.CheckoutService>();
         services.AddSingleton<Application.Sales.ICorrectionService, Sales.CorrectionService>();
-        services.AddSingleton<Application.Recovery.IBackupService, Recovery.BackupService>();
+        services.AddSingleton<Recovery.BackupService>();
+        services.AddSingleton<Application.Recovery.IBackupService>(sp => sp.GetRequiredService<Recovery.BackupService>());
+        services.AddSingleton<Recovery.UpdateManager>();
+        services.AddSingleton<Recovery.MaintenanceService>();
         services.AddSingleton<Application.Recovery.IRecoveryService, Recovery.RecoveryService>();
         services.AddSingleton<Application.Sales.IOrderQueryService, Sales.OrderQueryService>();
         services.AddSingleton<Application.Receipts.IPrintService, Receipts.PrintService>();

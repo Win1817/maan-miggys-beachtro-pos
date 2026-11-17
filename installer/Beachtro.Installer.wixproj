@@ -1,0 +1,18 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <!--
+    IB-27 Windows Installer package (POS-DEC-011). WiX Toolset 5.0.2 is MS-RL; later WiX versions carry an
+    additional maintenance-fee agreement, so this version is pinned until licensing is reviewed (IB-32).
+    Built by build/package.ps1 from a self-contained publish folder; never run against operational data.
+  -->
+  <PropertyGroup>
+    <OutputName>BeachtroPOS</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.0.0</ProductVersion>
+    <PublishDir Condition="'$(PublishDir)' == ''">..\artifacts\publish\</PublishDir>
+    <DefineConstants>ProductVersion=$(ProductVersion);PublishDir=$(PublishDir)</DefineConstants>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <!-- ICE60: .NET publish includes versioned non-font files without a language; harmless with the default
+         major-upgrade order (old version removed before files are compared). -->
+    <SuppressIces>ICE60</SuppressIces>
+  </PropertyGroup>
+</Project>

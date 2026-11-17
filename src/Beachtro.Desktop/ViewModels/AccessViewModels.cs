@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Beachtro.Application.Security;
@@ -74,6 +75,17 @@ public sealed class BootstrapViewModel : AccessViewModel
     public string Username { get => _username; set => Set(ref _username, value); }
     public string DisplayName { get => _displayName; set => Set(ref _displayName, value); }
 
+    /// <summary>The database is missing on a PC that was in use: only restoring is offered (POS-DEC-011).</summary>
+    public bool RestoreOnly { get; init; }
+
+    public bool CanCreateOwner => !RestoreOnly;
+
+    public string RestoreHeading => RestoreOnly ? "The shop's database is missing" : "Replacing a PC?";
+
+    public string RestoreHint => RestoreOnly
+        ? "This PC was in use (its number journal or backups are here) but the database file is gone. Starting empty would lose the ledger, so restore the newest backup package. Sign in with an Owner or Administrator account from that backup. The journals still on this PC are used to prove which receipt numbers were already used."
+        : "Restore the shop's last backup package instead of starting empty. Sign in with an Owner or Administrator account from that backup. Selling stays paused until you resolve what the old PC may have done after the backup.";
+
     // Replacement PC (POS-DEC-010): restore a backup instead of creating a new owner.
     private string _packagePath = string.Empty;
     private string _restoreUsername = string.Empty;
@@ -84,7 +96,7 @@ public sealed class BootstrapViewModel : AccessViewModel
     public string RestoreReason { get => _restoreReason; set => Set(ref _restoreReason, value); }
     public ICommand BrowseCommand => new RelayCommand(_ =>
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose the backup package", Filter = "Backup package (*.zip)|*.zip" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose the backup package", Filter = "Backup package (*.zip)|*.zip", InitialDirectory = Shell.Services.Paths.Backups };
         if (dialog.ShowDialog() == true)
         {
             PackagePath = dialog.FileName;
@@ -235,4 +247,62 @@ public sealed class PasswordBoxesConverter : System.Windows.Data.IMultiValueConv
 
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, System.Globalization.CultureInfo culture) =>
         throw new NotSupportedException();
+}
+
+/// <summary>
+/// The data was written by a newer version (POS-DEC-011). This version never opens it. Recommended: install
+/// the newer version again. Otherwise roll back to a backup made before the update, with an Owner or
+/// Administrator sign-in from that backup; everything recorded since that backup is left out and the PC
+/// starts in recovery mode.
+/// </summary>
+public sealed class UpdateRollbackViewModel : AccessViewModel
+{
+    private string _packagePath;
+    private string _username = string.Empty;
+    private string _reason = "Rolling back an update";
+
+    public UpdateRollbackViewModel(ShellViewModel shell)
+        : base(shell)
+    {
+        var backups = shell.Services.Paths.Backups;
+        _packagePath = Directory.Exists(backups)
+            ? Directory.EnumerateFiles(backups, "pos_preupdate_*.zip").OrderDescending(StringComparer.Ordinal).FirstOrDefault() ?? string.Empty
+            : string.Empty;
+        BrowseCommand = new RelayCommand(_ =>
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose the backup made before the update", Filter = "Backup package (*.zip)|*.zip", InitialDirectory = backups };
+            if (dialog.ShowDialog() == true)
+            {
+                PackagePath = dialog.FileName;
+            }
+        });
+        RollbackCommand = Command(async p =>
+        {
+            var password = ShellViewModel.TakePassword(p);
+            var result = await Task.Run(() => Shell.Services.Backups.RestoreForUpdateRollbackAsync(PackagePath.Trim(), Username, password, Reason));
+            if (!result.IsSuccess)
+            {
+                Error = result.Message;
+                return;
+            }
+
+            System.Windows.MessageBox.Show(
+                "The update was rolled back to the chosen backup. The newer data was kept as evidence in the recovery folder. "
+                + "Beachtro POS will now restart; sign in and finish on the Recovery page before selling.",
+                "Beachtro POS", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            App.Restart();
+        });
+    }
+
+    public string Explanation =>
+        "This data was saved by a newer version of Beachtro POS, so this version will not open it (that could damage it). "
+        + "The safest fix is to install the newer version again. Only if that version cannot be used, roll back to a backup made before the update: "
+        + "anything recorded after that backup is not brought back.";
+
+    public string SchemaDetail => "Newer data changes: " + string.Join(", ", Shell.NewerSchema);
+    public string PackagePath { get => _packagePath; set => Set(ref _packagePath, value); }
+    public string Username { get => _username; set => Set(ref _username, value); }
+    public string Reason { get => _reason; set => Set(ref _reason, value); }
+    public ICommand BrowseCommand { get; }
+    public ICommand RollbackCommand { get; }
 }

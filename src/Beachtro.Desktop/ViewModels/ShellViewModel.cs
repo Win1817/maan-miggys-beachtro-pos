@@ -7,6 +7,18 @@ using Beachtro.Desktop.Mvvm;
 
 namespace Beachtro.Desktop.ViewModels;
 
+/// <summary>How the app starts after inspecting the database (POS-DEC-011).</summary>
+public enum StartupMode
+{
+    Normal,
+
+    /// <summary>The database is missing but the PC was in use: restore only, no new owner.</summary>
+    RestoreOnly,
+
+    /// <summary>The data was written by a newer version: reinstall it or roll back to a pre-update backup.</summary>
+    UpdateRollback,
+}
+
 /// <summary>
 /// Top-level state: first-run setup → sign-in → (forced password change) → main pages, with the
 /// inactivity lock and Ctrl+L. Navigation is filtered by capability for convenience only; every
@@ -88,9 +100,22 @@ public sealed class ShellViewModel : ObservableObject
     public ICommand LockCommand { get; }
     public ICommand SignOutCommand { get; }
 
+    public StartupMode StartupMode { get; set; }
+
+    /// <summary>Migrations in the data that this version does not know (update rollback screen).</summary>
+    public IReadOnlyList<string> NewerSchema { get; set; } = [];
+
     public async Task StartAsync()
     {
-        CurrentPage = await Services.Identity.IsBootstrapRequiredAsync() ? new BootstrapViewModel(this) : new LoginViewModel(this);
+        if (StartupMode == StartupMode.UpdateRollback)
+        {
+            CurrentPage = new UpdateRollbackViewModel(this);
+            return;
+        }
+
+        CurrentPage = StartupMode == StartupMode.RestoreOnly || await Services.Identity.IsBootstrapRequiredAsync()
+            ? new BootstrapViewModel(this) { RestoreOnly = StartupMode == StartupMode.RestoreOnly }
+            : new LoginViewModel(this);
         _inactivityTimer.Start();
     }
 

@@ -187,5 +187,6 @@
         <DataTemplate DataType="{x:Type vm:ShiftsViewModel}"><v:ShiftsView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:UsersViewModel}"><v:UsersView /></DataTemplate>
         <DataTemplate DataType="{x:Type vm:RecoveryViewModel}"><v:RecoveryView /></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:UpdateRollbackViewModel}"><v:UpdateRollbackView /></DataTemplate>
     </Application.Resources>
 </Application>

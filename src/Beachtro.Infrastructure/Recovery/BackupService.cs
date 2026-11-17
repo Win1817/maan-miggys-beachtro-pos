@@ -70,8 +70,77 @@ public sealed class BackupService(
 
         var now = clock.UtcNowMilliseconds;
         var backupId = Guid.NewGuid();
+        try
+        {
+            var (built, problem) = BuildPackage("pos_backup", backupId, now);
+            if (built is null)
+            {
+                return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable, problem!);
+            }
+
+            await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            RecordPackage(db, backupId, built, now, session.UserId, session.DisplayName, "Backup.Created");
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            var pruned = await ApplyRetentionAsync(db, now, session, cancellationToken).ConfigureAwait(false);
+            return Result<BackupInfo>.Ok(new BackupInfo(backupId, built.Package, built.SizeBytes, built.PackageSha256, now, built.Facts.LastSaleNumber, pruned));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException or InvalidDataException)
+        {
+            return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable, "The backup could not be written. The live database was not changed.");
+        }
+    }
+
+    /// <summary>Records a built package as a verified backup and its Ready artifact (caller saves).</summary>
+    internal static void RecordPackage(PosDbContext db, Guid backupId, BuiltPackage built, long now, Guid? actorId, string actorName, string action)
+    {
+        db.Backups.Add(new Backup
+        {
+            Id = backupId,
+            RelativePath = built.RelativePath,
+            SchemaVersion = Math.Max(1, built.Facts.Migrations.Count),
+            AppVersion = AppVersion,
+            CreatedUtc = now,
+            SizeBytes = built.SizeBytes,
+            Sha256 = built.PackageSha256,
+            ManifestJson = built.Manifest,
+            LastSaleId = built.Facts.LastSaleId,
+            LastSaleNumber = built.Facts.LastSaleNumber,
+            VerifiedUtc = now,
+            VerificationState = BackupVerificationState.Verified,
+            UploadState = BackupUploadState.NotQueued,
+        });
+
+        // The package is complete, so its artifact is created Ready; it can never be rebuilt from a newer database.
+        db.ArtifactRecords.Add(new ArtifactRecord
+        {
+            Id = Guid.NewGuid(),
+            LogicalKey = $"backup/{backupId:D}/schema1",
+            Type = ArtifactType.Backup,
+            SourceId = backupId,
+            BackupId = backupId,
+            PayloadSchemaVersion = 1,
+            RelativePath = built.RelativePath,
+            Sha256 = built.PackageSha256,
+            SizeBytes = built.SizeBytes,
+            State = ArtifactState.Ready,
+            CreatedUtc = now,
+            MaterializedUtc = now,
+        });
+        AuditRecorder.Record(db, now, actorId, actorName, action, "Backup", backupId.ToString(), null,
+            new { package = Path.GetFileName(built.Package), sizeBytes = built.SizeBytes, sha256 = built.PackageSha256, databaseSha256 = built.DatabaseSha256, lastSaleNumber = built.Facts.LastSaleNumber });
+    }
+
+    public sealed record BuiltPackage(string Package, string PackageSha256, string Manifest, SnapshotFacts Facts, string DatabaseSha256, long SizeBytes, string RelativePath);
+
+    /// <summary>
+    /// Builds and verifies one backup package at file level (snapshot, journals, manifest, zip). It needs no
+    /// EF model, so it also runs before an update migrates the database (POS-DEC-011). Callers record the row.
+    /// </summary>
+    internal (BuiltPackage? Package, string? Problem) BuildPackage(string prefix, Guid backupId, long now)
+    {
         var stamp = DateTimeOffset.FromUnixTimeMilliseconds(now).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
-        var finalFolder = Path.Combine(paths.Backups, $"pos_backup_{stamp}_{backupId:N}");
+        var finalFolder = Path.Combine(paths.Backups, $"{prefix}_{stamp}_{backupId:N}");
         var tempFolder = finalFolder + ".partial";
         Directory.CreateDirectory(tempFolder);
 
@@ -91,7 +160,7 @@ public sealed class BackupService(
             if (problems.Count > 0)
             {
                 Directory.Delete(tempFolder, recursive: true);
-                return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable, "The backup copy failed verification: " + string.Join(" ", problems));
+                return (null, "The backup copy failed verification: " + string.Join(" ", problems));
             }
 
             // 3. Journal checkpoint as evidence (the live journal is never restored over).
@@ -158,7 +227,7 @@ public sealed class BackupService(
                 w.WriteEndObject();
                 w.WriteEndObject();
             });
-            await File.WriteAllTextAsync(Path.Combine(tempFolder, ManifestFile), manifest, cancellationToken).ConfigureAwait(false);
+            File.WriteAllText(Path.Combine(tempFolder, ManifestFile), manifest);
 
             // 4. Package, flush, re-verify the package itself, then give it its final name.
             var package = finalFolder + PackageExtension;
@@ -174,7 +243,7 @@ public sealed class BackupService(
             {
                 File.Delete(partial);
                 Directory.Delete(tempFolder, recursive: true);
-                return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable, "The backup package failed verification: " + string.Join(" ", packageProblems));
+                return (null, "The backup package failed verification: " + string.Join(" ", packageProblems));
             }
 
             var packageHash = Sha256File(partial);
@@ -182,47 +251,7 @@ public sealed class BackupService(
             Directory.Delete(tempFolder, recursive: true);
             var size = new FileInfo(package).Length;
             var relative = Path.GetRelativePath(paths.Root, package).Replace('\\', '/');
-
-            await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
-            db.Backups.Add(new Backup
-            {
-                Id = backupId,
-                RelativePath = relative,
-                SchemaVersion = Math.Max(1, facts.Migrations.Count),
-                AppVersion = AppVersion,
-                CreatedUtc = now,
-                SizeBytes = size,
-                Sha256 = packageHash,
-                ManifestJson = manifest,
-                LastSaleId = facts.LastSaleId,
-                LastSaleNumber = facts.LastSaleNumber,
-                VerifiedUtc = now,
-                VerificationState = BackupVerificationState.Verified,
-                UploadState = BackupUploadState.NotQueued,
-            });
-
-            // The package is complete, so its artifact is created Ready; it can never be rebuilt from a newer database.
-            db.ArtifactRecords.Add(new ArtifactRecord
-            {
-                Id = Guid.NewGuid(),
-                LogicalKey = $"backup/{backupId:D}/schema1",
-                Type = ArtifactType.Backup,
-                SourceId = backupId,
-                BackupId = backupId,
-                PayloadSchemaVersion = 1,
-                RelativePath = relative,
-                Sha256 = packageHash,
-                SizeBytes = size,
-                State = ArtifactState.Ready,
-                CreatedUtc = now,
-                MaterializedUtc = now,
-            });
-            AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Backup.Created", "Backup", backupId.ToString(), null,
-                new { package = Path.GetFileName(package), sizeBytes = size, sha256 = packageHash, databaseSha256 = dbHash, lastSaleNumber = facts.LastSaleNumber });
-            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-            var pruned = await ApplyRetentionAsync(db, now, session, cancellationToken).ConfigureAwait(false);
-            return Result<BackupInfo>.Ok(new BackupInfo(backupId, package, size, packageHash, now, facts.LastSaleNumber, pruned));
+            return (new BuiltPackage(package, packageHash, manifest, facts, dbHash, size, relative), null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException or InvalidDataException)
         {
@@ -236,7 +265,7 @@ public sealed class BackupService(
                 File.Delete(finalFolder + PackageExtension + ".partial");
             }
 
-            return Result<BackupInfo>.Fail(ResultStatus.StorageUnavailable, "The backup could not be written. The live database was not changed.");
+            throw;
         }
     }
 
@@ -283,6 +312,45 @@ public sealed class BackupService(
             .ConfigureAwait(false);
     }
 
+    public async Task<Result<RestoreResult>> RestoreForUpdateRollbackAsync(string packagePath, string username, string password, string reason, CancellationToken cancellationToken = default)
+    {
+        await using (var current = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var known = current.Database.GetMigrations().ToHashSet(StringComparer.Ordinal);
+            if (!File.Exists(paths.DatabaseFile) || AppliedMigrations(paths.DatabaseFile).All(known.Contains))
+            {
+                return Result<RestoreResult>.Fail(ResultStatus.Forbidden,
+                    "Rolling back an update is only offered when this version finds data written by a newer version. Use the Recovery page instead.");
+            }
+        }
+
+        return await RestoreCoreAsync(packagePath, reason, new NewDeviceCredentials(username ?? string.Empty, password ?? string.Empty), Guid.Empty, string.Empty, cancellationToken,
+            updateRollback: true).ConfigureAwait(false);
+    }
+
+    /// <summary>Migration IDs recorded in a database file, read without the EF model (works on newer schemas).</summary>
+    internal static IReadOnlyList<string> AppliedMigrations(string databasePath)
+    {
+        using var c = OpenConnection(databasePath, readOnly: true, pooling: false);
+        using var exists = c.CreateCommand();
+        exists.CommandText = "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = '__EFMigrationsHistory';";
+        if (Convert.ToInt64(exists.ExecuteScalar(), CultureInfo.InvariantCulture) == 0)
+        {
+            return [];
+        }
+
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId;";
+        using var r = cmd.ExecuteReader();
+        var list = new List<string>();
+        while (r.Read())
+        {
+            list.Add(r.GetString(0));
+        }
+
+        return list;
+    }
+
     private sealed record NewDeviceCredentials(string Username, string Password);
 
     /// <summary>
@@ -292,8 +360,12 @@ public sealed class BackupService(
     /// lead to holds rather than guesses (POS-DEC-010).
     /// </summary>
     private async Task<Result<RestoreResult>> RestoreCoreAsync(
-        string backupFolder, string reason, NewDeviceCredentials? newDevice, Guid actorId, string actorName, CancellationToken cancellationToken)
+        string backupFolder, string reason, NewDeviceCredentials? newDevice, Guid actorId, string actorName, CancellationToken cancellationToken,
+        bool updateRollback = false)
     {
+        // Update rollback signs in from the backup like a new PC, but stays the same installation.
+        var credentials = newDevice;
+        var isNewDevice = newDevice is not null && !updateRollback;
         var invalid = TextRules.ValidateRequired(reason, "Reason", TextRules.ReasonMaximum);
         if (invalid is not null)
         {
@@ -323,7 +395,12 @@ public sealed class BackupService(
         }
 
         var candidateDb = Path.Combine(backupFolder, DatabaseFile);
-        if (newDevice is null)
+        if (credentials is not null && updateRollback && report.InstallationId != currentInstallation)
+        {
+            return Result<RestoreResult>.Fail(ResultStatus.Validation, "This backup belongs to a different installation; choose a backup made on this PC before the update.");
+        }
+
+        if (credentials is null)
         {
             if (report.InstallationId != currentInstallation)
             {
@@ -338,7 +415,7 @@ public sealed class BackupService(
         }
         else
         {
-            var account = CheckBackupAccount(candidateDb, newDevice);
+            var account = CheckBackupAccount(candidateDb, credentials);
             if (account is null)
             {
                 // Same message for unknown name, wrong password, inactive or not allowed: no account probing.
@@ -437,13 +514,13 @@ public sealed class BackupService(
             NumberEvidenceJson = JsonSerializer.Serialize(new { blocked = blocked.Select(b => b.SeriesKey), numbersUnprovable, possiblyUsed }),
             ReconciledLastSale = report.LastSaleNumber,
             Disposition = RecoveryDisposition.Hold,
-            Notes = (newDevice is null ? string.Empty : "Replacement PC. ") + reason.Trim(),
+            Notes = (isNewDevice ? "Replacement PC. " : updateRollback ? "Update rolled back. " : string.Empty) + reason.Trim(),
             NewGenerationId = Guid.NewGuid(),
-            UploadIdentityCutoffUtc = newDevice is null ? null : now,
+            UploadIdentityCutoffUtc = isNewDevice ? now : null,
         });
-        AuditRecorder.Record(db, now, actorId, actorName, newDevice is null ? "Recovery.Restored" : "Recovery.RestoredOnNewDevice", "RecoveryRun", runId.ToString(), reason,
+        AuditRecorder.Record(db, now, actorId, actorName, isNewDevice ? "Recovery.RestoredOnNewDevice" : updateRollback ? "Recovery.UpdateRolledBack" : "Recovery.Restored", "RecoveryRun", runId.ToString(), reason,
             new { backupId = report.BackupId, lastSaleNumber = report.LastSaleNumber, blockedSeries = blocked.Count, possiblyUsed, preparedRequests = prepared,
-                uploadsReset = uploads.Reset, uploadsAdopted = uploads.Adopted, uploadsHeld = uploads.Held, replacedInstallation = newDevice is null ? (Guid?)null : currentInstallation });
+                uploadsReset = uploads.Reset, uploadsAdopted = uploads.Adopted, uploadsHeld = uploads.Held, replacedInstallation = isNewDevice ? currentInstallation : (Guid?)null });
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<RestoreResult>.Ok(new RestoreResult(runId, preserved, blocked, prepared));
@@ -721,7 +798,7 @@ public sealed class BackupService(
 
     private static string AppVersion => typeof(BackupService).Assembly.GetName().Version?.ToString() ?? "0";
 
-    private sealed record SnapshotFacts(Guid InstallationId, IReadOnlyList<string> Migrations, Guid? LastSaleId, string? LastSaleNumber,
+    public sealed record SnapshotFacts(Guid InstallationId, IReadOnlyList<string> Migrations, Guid? LastSaleId, string? LastSaleNumber,
         long OrderCount, long OrderTotalM, long CorrectionCount, long CorrectionTotalM);
 
     private static BackupCandidateReport Validate(string folder, IReadOnlyCollection<string> knownMigrations)

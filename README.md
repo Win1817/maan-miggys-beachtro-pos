@@ -4,7 +4,7 @@ Native Windows 11 point-of-sale for Ma'an and Miggy's Beachtro.
 
 - Requirements baseline: [BRD v1.2](Maan_and_Miggys_Beachtro_POS_BRD_v1.2.md) (never edited)
 - Design: [design/](design/) — start with [IMPLEMENTATION_READINESS.md](design/IMPLEMENTATION_READINESS.md)
-- Current decisions: [POS-DEC-010](design/POS-DEC-010.md) — milestone 11 (recovery and fault regression); [POS-DEC-009](design/POS-DEC-009.md) — no taxation; [POS-DEC-008](design/POS-DEC-008.md) — milestone 10 (built before milestone 9, which needs a Google account); earlier: POS-DEC-002 to POS-DEC-007. Test profile only
+- Current decisions: [POS-DEC-011](design/POS-DEC-011.md) — milestone 12, installer part (installer, updates, rollback, maintenance); [POS-DEC-010](design/POS-DEC-010.md) — milestone 11 (recovery and fault regression); [POS-DEC-009](design/POS-DEC-009.md) — no taxation; [POS-DEC-008](design/POS-DEC-008.md) — milestone 10 (built before milestone 9, which needs a Google account); earlier: POS-DEC-002 to POS-DEC-007. Test profile only
 - Roadmap: [GitHub milestones](https://github.com/Win1817/maan-miggys-beachtro-pos/milestones) (M0–M14)
 
 ## Build
@@ -16,6 +16,8 @@ dotnet tool restore
 dotnet build
 dotnet test
 ```
+
+Installer: `powershell -ExecutionPolicy Bypass -File build\package.ps1` writes `dist\BeachtroPOS-<version>-win-x64.msi` (self-contained, offline), its SHA-256 and `release.json`. Installing, updating, rolling back and the maintenance tool: [design/INSTALL_AND_UPDATE_GUIDE.md](design/INSTALL_AND_UPDATE_GUIDE.md).
 
 Package versions are pinned centrally in `Directory.Packages.props`; restores are locked by `packages.lock.json`.
 
@@ -36,7 +38,7 @@ Package versions are pinned centrally in `Directory.Packages.props`; restores ar
 
 ## Status
 
-Milestones 0–8, 10 and 11 complete: core (money, database, identity, profiles, catalog, numbering, checkout, corrections, backup/restore), the screens (owner setup, sign-in, lock, POS, orders with refunds, products, inventory, settings, receipt printing), shifts and cash movements, the dashboard, the seven reports with business-day close, CSV/PDF export, stored artifact files, the durable upload queue (simulated destination only) zip backup packages with retention and a daily/monthly scheduler, the Users page and the settings tabs (business profile, calendar revisions and history), the no-taxation policy (POS-DEC-009), replacement-PC recovery with the Recovery page, and a fault regression suite ([design/FAULT_REGRESSION.md](design/FAULT_REGRESSION.md)). Milestone 9 (Google Drive) waits for a business Google account. Work stops here pending the next decision (POS-DEC-010).
+Milestones 0–8, 10, 11 and the installer part of 12 complete: core (money, database, identity, profiles, catalog, numbering, checkout, corrections, backup/restore), the screens (owner setup, sign-in, lock, POS, orders with refunds, products, inventory, settings, receipt printing), shifts and cash movements, the dashboard, the seven reports with business-day close, CSV/PDF export, stored artifact files, the durable upload queue (simulated destination only) zip backup packages with retention and a daily/monthly scheduler, the Users page and the settings tabs (business profile, calendar revisions and history), the no-taxation policy (POS-DEC-009), replacement-PC recovery with the Recovery page, a fault regression suite ([design/FAULT_REGRESSION.md](design/FAULT_REGRESSION.md)), and the Windows installer with pre-update backups, update rollback, a private data folder and an owner maintenance tool. Milestone 9 (Google Drive) waits for a business Google account. Work stops here pending the next decision (POS-DEC-011).
 
 | Project | Purpose |
 |---|---|
@@ -44,6 +46,7 @@ Milestones 0–8, 10 and 11 complete: core (money, database, identity, profiles,
 | `src/Beachtro.Application` | Ports, typed results, capability matrix/role templates, sessions, service contracts |
 | `src/Beachtro.Infrastructure` | Data paths, lock, EF Core/SQLite schema, migrations, guard triggers, identity, profiles, catalog, numbering journal, checkout, corrections, backup/restore, shifts, reports, CSV/PDF rendering, artifact materializer, upload queue, scheduler |
 | `src/Beachtro.Desktop` | WPF shell and composition root (Test profile only) |
+| `installer/`, `build/` | WiX 5 MSI project and the package script |
 | `tests/*` | Domain fixtures/invariants, real-SQLite schema/constraint tests, architecture rules |
 
 Data lives in `%LocalAppData%\BeachtroPOS-Test\` (`data\numbers.journal` is the number reservation journal and `data\uploads.journal` the upload-identity journal: never delete or edit either). New migration: `dotnet ef migrations add <Name> --project src/Beachtro.Infrastructure --output-dir Persistence/Migrations --namespace Beachtro.Infrastructure.Persistence.Migrations`, then move `PosDbContextModelSnapshot.cs` back into `Persistence/Migrations/` if EF places it elsewhere.

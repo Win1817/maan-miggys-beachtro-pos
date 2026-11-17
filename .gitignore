@@ -21,3 +21,6 @@ TestResults/
 *.log
 secrets/
 appsettings.*.local.json
+
+# Installer output
+dist/

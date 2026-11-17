@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="{StaticResource Page}">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-        <Border Style="{StaticResource Card}" Width="460" VerticalAlignment="Top" Padding="28" Margin="0,0,16,0">
+        <Border Style="{StaticResource Card}" Width="460" VerticalAlignment="Top" Padding="28" Margin="0,0,16,0"
+                Visibility="{Binding CanCreateOwner, Converter={StaticResource Visible}}">
             <StackPanel>
                 <TextBlock Text="Set up the owner account" Style="{StaticResource Heading}" />
                 <TextBlock Style="{StaticResource Hint}"
@@ -33,9 +34,8 @@
         </Border>
         <Border Style="{StaticResource Card}" Width="420" VerticalAlignment="Top" Padding="28">
             <StackPanel>
-                <TextBlock Text="Replacing a PC?" Style="{StaticResource Heading}" />
-                <TextBlock Style="{StaticResource Hint}"
-                           Text="Restore the shop's last backup package instead of starting empty. Sign in with an Owner or Administrator account from that backup. Selling stays paused until you resolve what the old PC may have done after the backup." />
+                <TextBlock Text="{Binding RestoreHeading}" Style="{StaticResource Heading}" />
+                <TextBlock Style="{StaticResource Hint}" Text="{Binding RestoreHint}" />
                 <TextBlock Text="Backup package (.zip)" Style="{StaticResource Label}" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseCommand}" Margin="8,0,0,0" />
@@ -48,6 +48,10 @@
                 <TextBlock Text="Reason" Style="{StaticResource Label}" />
                 <TextBox Text="{Binding RestoreReason, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Restore reason" />
                 <Button Content="Restore from a backup" Margin="0,16,0,0" Command="{Binding RestoreCommand}" CommandParameter="{Binding ElementName=RestorePassword}" />
+                <Border Style="{StaticResource ErrorBox}" Margin="0,8,0,0"
+                        Visibility="{Binding RestoreOnly, Converter={StaticResource Visible}}">
+                    <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" />
+                </Border>
             </StackPanel>
         </Border>
         </StackPanel>

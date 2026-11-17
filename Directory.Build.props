@@ -16,6 +16,6 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <Company>Ma'an and Miggy's Beachtro</Company>
     <Product>Beachtro POS</Product>
-    <Version>0.1.0</Version>
+    <Version>0.12.0</Version>
   </PropertyGroup>
 </Project>

@@ -55,6 +55,13 @@ public interface IBackupService
     /// installation identity is kept; every series that may have been used on the lost PC is blocked.
     /// </summary>
     Task<Result<RestoreResult>> RestoreOnNewDeviceAsync(string packagePath, string username, string password, string reason, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Update rollback (POS-DEC-011): offered only when this version finds data written by a newer version.
+    /// Restores a backup of this installation made before the update; the credentials must belong to an
+    /// Owner or Administrator in that backup. The newer database is kept as evidence; recovery mode follows.
+    /// </summary>
+    Task<Result<RestoreResult>> RestoreForUpdateRollbackAsync(string packagePath, string username, string password, string reason, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A checkout or refund prepared but never completed in the restored data.</summary>

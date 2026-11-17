@@ -651,6 +651,6 @@ public sealed class IdentityService(
         UpdatedUtc = now,
     };
 
-    private static string GenerateTemporaryPassword() =>
+    internal static string GenerateTemporaryPassword() =>
         RandomNumberGenerator.GetString(TemporaryPasswordAlphabet, TemporaryPasswordLength);
 }
