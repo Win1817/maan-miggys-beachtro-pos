@@ -16,7 +16,7 @@ public sealed record ProductInput(
     long UnitPriceMinor,
     long UnitStepQ,
     bool TrackStock,
-    string TaxKey,
+    string? TaxKey,
     bool IsActive,
     int? ExpectedVersion);
 

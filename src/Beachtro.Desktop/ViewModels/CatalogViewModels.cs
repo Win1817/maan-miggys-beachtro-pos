@@ -15,7 +15,7 @@ public sealed class ProductsViewModel : PageViewModel
     private string _name = string.Empty;
     private string _priceText = string.Empty;
     private CategoryView? _category;
-    private string? _taxKey;
+    private string? _taxKey;   // kept unchanged on edit; new products get the no-tax entry (POS-DEC-009)
     private bool _trackStock = true;
     private bool _isActive = true;
     private string _newCategory = string.Empty;
@@ -32,7 +32,6 @@ public sealed class ProductsViewModel : PageViewModel
 
     public ObservableCollection<ProductView> Products { get; } = [];
     public ObservableCollection<CategoryView> Categories { get; } = [];
-    public ObservableCollection<string> TaxKeys { get; } = [];
 
     public ProductView? Selected { get => _selected; set { if (Set(ref _selected, value)) { Edit(value); } } }
     public string EditHeading => _editingId is null ? "New product" : "Edit product";
@@ -40,7 +39,6 @@ public sealed class ProductsViewModel : PageViewModel
     public string Name { get => _name; set => Set(ref _name, value); }
     public string PriceText { get => _priceText; set => Set(ref _priceText, value); }
     public CategoryView? Category { get => _category; set => Set(ref _category, value); }
-    public string? TaxKey { get => _taxKey; set => Set(ref _taxKey, value); }
     public bool TrackStock { get => _trackStock; set => Set(ref _trackStock, value); }
     public bool IsActive { get => _isActive; set => Set(ref _isActive, value); }
     public string NewCategory { get => _newCategory; set => Set(ref _newCategory, value); }
@@ -73,15 +71,7 @@ public sealed class ProductsViewModel : PageViewModel
             Products.Add(p);
         }
 
-        TaxKeys.Clear();
-        if (profile.IsSuccess)
-        {
-            foreach (var key in profile.Value!.TaxRules.Keys.Order(StringComparer.Ordinal))
-            {
-                TaxKeys.Add(key);
-            }
-        }
-        else
+        if (!profile.IsSuccess)
         {
             Info = "No calculation profile is in effect. Load sample data in Settings (Test profile) before adding products.";
         }
@@ -97,7 +87,7 @@ public sealed class ProductsViewModel : PageViewModel
         Name = p?.Name ?? string.Empty;
         PriceText = p is null ? string.Empty : Formatting.Money(p.UnitPriceMinor, p.CurrencyExponent).Replace(",", string.Empty, StringComparison.Ordinal);
         Category = Categories.FirstOrDefault(c => c.Id == p?.CategoryId) ?? Categories.FirstOrDefault();
-        TaxKey = p?.TaxKey ?? TaxKeys.FirstOrDefault();
+        _taxKey = p?.TaxKey;
         TrackStock = p?.TrackStock ?? true;
         IsActive = p?.IsActive ?? true;
         OnPropertyChanged(nameof(EditHeading));
@@ -111,14 +101,14 @@ public sealed class ProductsViewModel : PageViewModel
             return;
         }
 
-        if (Category is null || TaxKey is null)
+        if (Category is null)
         {
-            Error = "Choose a category and a tax entry.";
+            Error = "Choose a category.";
             return;
         }
 
         var result = await Services.Catalog.SaveProductAsync(Session,
-            new ProductInput(_editingId, Category.Id, Sku, Name, null, price, 1000, TrackStock, TaxKey, IsActive, _editingVersion));
+            new ProductInput(_editingId, Category.Id, Sku, Name, null, price, 1000, TrackStock, _taxKey, IsActive, _editingVersion));
         if (Check(result))
         {
             Info = $"Saved {Name}.";

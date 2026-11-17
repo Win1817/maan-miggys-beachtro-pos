@@ -192,6 +192,24 @@ public sealed class ProfileService(
         return Result<EffectiveCalendarProfile>.Ok(new EffectiveCalendarProfile(policy.Id, policy.Revision, policy.ApprovalState, new CalendarPolicy(timeZoneId, cutoff)));
     }
 
+    public async Task<Result<Guid>> ApplyNoTaxPolicyAsync(UserSession session, string? evidenceReference, CancellationToken cancellationToken = default)
+    {
+        var now = clock.UtcNowMilliseconds;
+        var current = await GetEffectiveCalculationProfileAsync(now, cancellationToken).ConfigureAwait(false);
+        if (current.IsSuccess && current.Value!.IsNoTax)
+        {
+            return Result<Guid>.Ok(current.Value.Profile.Id);
+        }
+
+        var keys = current.IsSuccess && current.Value!.TaxRules.Count > 0
+            ? current.Value.TaxRules.Keys.Order(StringComparer.Ordinal).ToArray()
+            : [NoTaxPolicy.DefaultKey];
+        var state = RuntimeProfilePolicy.ProductionEnabledInThisBuild ? ProfileApprovalState.Approved : ProfileApprovalState.Test;
+        var evidence = string.IsNullOrWhiteSpace(evidenceReference) ? "POS-DEC-009: the business charges no tax" : evidenceReference.Trim();
+        return await CreateCalculationProfileAsync(session, new CalculationProfileDraft(state, now, Currency.Php,
+            keys.Select(k => new TaxConfigurationDraft(k, 0, PriceMode.Inclusive, TreatmentCode.NotTaxed)).ToArray(), evidence), cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<Result<ProfileHistory>> GetProfileHistoryAsync(UserSession session, CancellationToken cancellationToken = default)
     {
         var auth = await identity.AuthorizeAsync(session, Capabilities.SettingsOperational, false, cancellationToken).ConfigureAwait(false);
@@ -249,11 +267,11 @@ public sealed class ProfileService(
         var calculation = await GetEffectiveCalculationProfileAsync(now, cancellationToken).ConfigureAwait(false);
         if (!calculation.IsSuccess || calculation.Value!.Profile.ApprovalState != ProfileApprovalState.Approved)
         {
-            blockers.Add("No Approved calculation (tax) profile is in effect; tax treatment must be professionally confirmed (D-01).");
+            blockers.Add("No Approved no-tax calculation profile is in effect (POS-DEC-009: the business charges no tax).");
         }
-        else if (calculation.Value.HasUnknownTreatment)
+        else if (!calculation.Value.IsNoTax)
         {
-            blockers.Add("The effective calculation profile still has an Unknown tax treatment.");
+            blockers.Add("The effective calculation profile still computes tax; this POS charges no tax (POS-DEC-009).");
         }
 
         var calendar = await GetEffectiveCalendarProfileAsync(now, cancellationToken).ConfigureAwait(false);

@@ -11,7 +11,7 @@ namespace Beachtro.Infrastructure.Tests.Configuration;
 
 /// <summary>
 /// T-01/02/17 for the settings and users screens (IB-25, POS-DEC-008): the shared delegation rule the
-/// screen uses agrees with the service, the revision history, and the pure draft preview.
+/// screen uses agrees with the service, and the revision history.
 /// </summary>
 public sealed class SettingsScreenTests : IDisposable
 {
@@ -120,24 +120,6 @@ public sealed class SettingsScreenTests : IDisposable
         // A manager can look but not change financial settings.
         Assert.Equal(ResultStatus.Forbidden, (await _h.Profiles.CreateCalculationProfileAsync(manager, Calc(ProfileApprovalState.Test, Now,
             new TaxConfigurationDraft("NONE", 0, PriceMode.Inclusive, TreatmentCode.TestNoTax)))).Status);
-    }
-
-    [Fact]
-    public void The_preview_splits_a_sample_price_like_checkout_does()
-    {
-        var draft = Calc(ProfileApprovalState.Draft, 0,
-            new TaxConfigurationDraft("INC", SyntheticRate, PriceMode.Inclusive, TreatmentCode.Taxable),
-            new TaxConfigurationDraft("EXC", SyntheticRate, PriceMode.Exclusive, TreatmentCode.Taxable),
-            new TaxConfigurationDraft("NONE", 0, PriceMode.Inclusive, TreatmentCode.TestNoTax),
-            new TaxConfigurationDraft("TBD", 0, PriceMode.Inclusive, TreatmentCode.Unknown));
-
-        var lines = ProfilePreview.Sample(draft, 112_00).ToDictionary(l => l.TaxKey);
-
-        Assert.Equal((100_00L, 12_00L, 112_00L), (lines["INC"].NetMinor, lines["INC"].TaxMinor, lines["INC"].TotalMinor));
-        Assert.Equal((112_00L, 13_44L, 125_44L), (lines["EXC"].NetMinor, lines["EXC"].TaxMinor, lines["EXC"].TotalMinor));
-        Assert.Equal((112_00L, 0L), (lines["NONE"].TotalMinor, lines["NONE"].TaxMinor));
-        Assert.Null(lines["INC"].Problem);
-        Assert.NotNull(lines["TBD"].Problem);
     }
 
     private static CalculationProfileDraft Calc(ProfileApprovalState state, long from, params TaxConfigurationDraft[] taxes) =>

@@ -16,7 +16,6 @@
                     <DataGridTextColumn Header="SKU" Binding="{Binding Sku}" Width="140" />
                     <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
                     <DataGridTextColumn Header="Price" Binding="{Binding UnitPriceMinor, Converter={StaticResource Money}}" Width="90" />
-                    <DataGridTextColumn Header="Tax" Binding="{Binding TaxKey}" Width="100" />
                     <DataGridCheckBoxColumn Header="Stock" Binding="{Binding TrackStock}" Width="60" />
                     <DataGridCheckBoxColumn Header="Active" Binding="{Binding IsActive}" Width="60" />
                 </DataGrid.Columns>
@@ -37,8 +36,7 @@
                     <TextBox Text="{Binding PriceText, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Text="Category" Style="{StaticResource Label}" />
                     <ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding Category}" DisplayMemberPath="Name" />
-                    <TextBlock Text="Tax entry" Style="{StaticResource Label}" />
-                    <ComboBox ItemsSource="{Binding TaxKeys}" SelectedItem="{Binding TaxKey}" />
+                    <TextBlock Text="Prices are final: this POS charges no tax." Style="{StaticResource Hint}" Margin="0,8,0,0" />
                     <CheckBox Content="Track stock for this product" IsChecked="{Binding TrackStock}" Margin="0,12,0,0" />
                     <CheckBox Content="Active (available for sale)" IsChecked="{Binding IsActive}" />
                     <Border Style="{StaticResource ErrorBox}" Visibility="{Binding Error, Converter={StaticResource Visible}}">

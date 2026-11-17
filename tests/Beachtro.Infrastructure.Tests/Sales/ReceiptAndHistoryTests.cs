@@ -202,12 +202,14 @@ public sealed class ReceiptAndHistoryTests : IAsyncLifetime
     {
         var harness = _h.Security;
         var demo = new DemoDataService(harness.Database.Factory, harness.Identity, harness.Profiles, _h.Catalog, harness.Clock, harness.Database.Paths);
+        _h.Clock.Advance(TimeSpan.FromSeconds(1));   // a new revision cannot start at the harness profile's own instant
         var first = Ok(await demo.LoadSampleDataAsync(_h.Owner));
         Assert.Equal(6, first.ProductsCreated);
-        Assert.Equal(0, first.ProfilesCreated); // the harness already configured profiles
-        Assert.Equal(0, Ok(await demo.LoadSampleDataAsync(_h.Owner)).ProductsCreated);
-        // The harness profile has NONE and SYN only, so samples fall back to an existing key.
-        Assert.Equal(1L, _h.Count("Products", "Sku = 'TEST-SILOG' AND TaxKey IN ('NONE', 'SYN')"));
+        Assert.Equal(1, first.ProfilesCreated); // the harness's taxed profile is switched to no tax (POS-DEC-009)
+        Assert.True(Ok(await harness.Profiles.GetEffectiveCalculationProfileAsync(harness.Clock.UtcNowMilliseconds)).IsNoTax);
+        var again = Ok(await demo.LoadSampleDataAsync(_h.Owner));
+        Assert.Equal((0, 0), (again.ProductsCreated, again.ProfilesCreated));
+        Assert.Equal(1L, _h.Count("Products", "Sku = 'TEST-SILOG' AND TaxKey = 'NONE'"));
 
         var production = new DemoDataService(harness.Database.Factory, harness.Identity, harness.Profiles, _h.Catalog, harness.Clock,
             new LocalDataPaths(harness.Database.Paths.Root, RuntimeProfile.Production));

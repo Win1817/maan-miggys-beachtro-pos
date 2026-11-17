@@ -44,6 +44,9 @@ public sealed record EffectiveCalculationProfile(
 {
     /// <summary>True when any configured tax treatment is still Unknown; such profiles cannot complete sales.</summary>
     public bool HasUnknownTreatment => TaxRules.Values.Any(r => r.Treatment == TreatmentCode.Unknown);
+
+    /// <summary>True when every entry charges no tax under the business's no-taxation policy (POS-DEC-009).</summary>
+    public bool IsNoTax => TaxRules.Count > 0 && TaxRules.Values.All(r => r.Treatment is TreatmentCode.NotTaxed);
 }
 
 public sealed record EffectiveCalendarProfile(Guid PolicyId, int Revision, ProfileApprovalState ApprovalState, CalendarPolicy Policy);
@@ -107,6 +110,13 @@ public interface IProfileService
 
     Task<Result<EffectiveCalendarProfile>> GetEffectiveCalendarProfileAsync(long atUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// POS-DEC-009 (no taxation): starts a new calculation revision, effective now, in which every
+    /// tax key in force is NotTaxed (or a single "NONE" key when there are none), so existing products
+    /// keep selling with no tax. Past sales keep the revision they were made under.
+    /// </summary>
+    Task<Result<Guid>> ApplyNoTaxPolicyAsync(UserSession session, string? evidenceReference, CancellationToken cancellationToken = default);
+
     /// <summary>Read-only revision history (settings.operational). Saving still needs settings.financial.</summary>
     Task<Result<ProfileHistory>> GetProfileHistoryAsync(UserSession session, CancellationToken cancellationToken = default);
 
@@ -117,6 +127,13 @@ public interface IProfileService
 
     /// <summary>Non-financial settings only (printer, UI). Financial policy is never a mutable key/value.</summary>
     Task<Result<Unit>> SetOperationalSettingAsync(UserSession session, string key, string valueJson, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The business charges no tax (POS-DEC-009).</summary>
+public static class NoTaxPolicy
+{
+    /// <summary>Tax key used when a profile has none; products created without a key use the profile's no-tax key.</summary>
+    public const string DefaultKey = "NONE";
 }
 
 public static class OperationalSettingKeys

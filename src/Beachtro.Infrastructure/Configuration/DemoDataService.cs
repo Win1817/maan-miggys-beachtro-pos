@@ -28,8 +28,8 @@ public sealed class DemoDataService(
     [
         ("TEST-ICED-TEA", "Iced Tea (sample)", "Drinks (sample)", 95_00, "NONE", 40),
         ("TEST-CALAMANSI", "Calamansi Juice (sample)", "Drinks (sample)", 85_00, "NONE", 30),
-        ("TEST-COFFEE", "Iced Coffee (sample)", "Drinks (sample)", 120_00, "SAMPLE-TAX", 30),
-        ("TEST-SILOG", "Tapsilog (sample)", "Meals (sample)", 180_00, "SAMPLE-TAX", 20),
+        ("TEST-COFFEE", "Iced Coffee (sample)", "Drinks (sample)", 120_00, "NONE", 30),
+        ("TEST-SILOG", "Tapsilog (sample)", "Meals (sample)", 180_00, "NONE", 20),
         ("TEST-FRIES", "Fries (sample)", "Snacks (sample)", 75_00, "NONE", 25),
         ("TEST-CORKAGE", "Corkage (sample, no stock)", "Snacks (sample)", 50_00, "NONE", null),
     ];
@@ -49,18 +49,17 @@ public sealed class DemoDataService(
 
         var now = clock.UtcNowMilliseconds;
         var profilesCreated = 0;
-        if (!(await profiles.GetEffectiveCalculationProfileAsync(now, cancellationToken).ConfigureAwait(false)).IsSuccess)
+        // No taxation (POS-DEC-009): the sample profile charges no tax, and running the loader again
+        // switches an older taxed sample profile to no tax.
+        var before = await profiles.GetEffectiveCalculationProfileAsync(now, cancellationToken).ConfigureAwait(false);
+        var noTax = await profiles.ApplyNoTaxPolicyAsync(session, "Sample data (Test profile)", cancellationToken).ConfigureAwait(false);
+        if (!noTax.IsSuccess)
         {
-            var created = await profiles.CreateCalculationProfileAsync(session, new CalculationProfileDraft(ProfileApprovalState.Test, now, Currency.Php,
-            [
-                new TaxConfigurationDraft("NONE", 0, PriceMode.Inclusive, TreatmentCode.TestNoTax),
-                new TaxConfigurationDraft("SAMPLE-TAX", 120_000, PriceMode.Inclusive, TreatmentCode.Taxable),
-            ], null), cancellationToken).ConfigureAwait(false);
-            if (!created.IsSuccess)
-            {
-                return created.As<DemoDataResult>();
-            }
+            return noTax.As<DemoDataResult>();
+        }
 
+        if (!before.IsSuccess || before.Value!.Profile.Id != noTax.Value)
+        {
             profilesCreated++;
         }
 

@@ -4,6 +4,7 @@ using Beachtro.Application.Configuration;
 using Beachtro.Application.Ports;
 using Beachtro.Application.Security;
 using Beachtro.Domain.Financial;
+using Beachtro.Domain.Financial.Calculation;
 using Beachtro.Domain.Model;
 using Beachtro.Infrastructure.Persistence;
 using Beachtro.Infrastructure.Persistence.Entities;
@@ -94,7 +95,7 @@ public sealed class CatalogService(
             ?? TextRules.ValidateRequired(input.Sku, "SKU", SkuMaximum)
             ?? (input.UnitPriceMinor is <= 0 or > FinancialLimits.MaxDocumentMinor ? "Price must be positive." : null)
             ?? (input.UnitStepQ is not (FinancialLimits.WholeUnitStepQ or FinancialLimits.FractionalStepQ) ? "Unit step must be whole units or fractional." : null)
-            ?? TextRules.ValidateRequired(input.TaxKey, "Tax key", 64);
+            ?? (input.TaxKey is { Length: > 64 } ? "Tax key is too long." : null);
         if (invalid is not null)
         {
             return Result<Guid>.Fail(ResultStatus.Validation, invalid);
@@ -107,9 +108,18 @@ public sealed class CatalogService(
             return Result<Guid>.Fail(ResultStatus.Validation, "Configure a calculation profile before adding products.");
         }
 
-        if (!profile.Value!.TaxRules.ContainsKey(input.TaxKey))
+        // No taxation (POS-DEC-009): a product saved without a tax key gets the profile's no-tax entry.
+        var taxKey = string.IsNullOrWhiteSpace(input.TaxKey)
+            ? profile.Value!.TaxRules.Where(r => r.Value.Treatment == TreatmentCode.NotTaxed).Select(r => r.Key).Order(StringComparer.Ordinal).FirstOrDefault()
+            : input.TaxKey.Trim();
+        if (taxKey is null)
         {
-            return Result<Guid>.Fail(ResultStatus.Validation, $"Tax key '{input.TaxKey}' is not configured in the current calculation profile.");
+            return Result<Guid>.Fail(ResultStatus.Validation, "The calculation profile in effect still has tax entries. Switch the POS to no tax in Settings → Calendar and tax first.");
+        }
+
+        if (!profile.Value!.TaxRules.ContainsKey(taxKey))
+        {
+            return Result<Guid>.Fail(ResultStatus.Validation, $"Tax key '{taxKey}' is not configured in the current calculation profile.");
         }
 
         var currency = profile.Value.Profile.Currency;
@@ -146,7 +156,7 @@ public sealed class CatalogService(
                 CurrencyExponent = currency.Exponent,
                 UnitStepQ = input.UnitStepQ,
                 TrackStock = input.TrackStock,
-                TaxKey = input.TaxKey,
+                TaxKey = taxKey,
                 IsActive = input.IsActive,
                 UpdatedUtc = now,
             };
@@ -178,7 +188,7 @@ public sealed class CatalogService(
                 trackStockBefore = product.TrackStock,
                 trackStockAfter = input.TrackStock,
                 taxKeyBefore = product.TaxKey,
-                taxKeyAfter = input.TaxKey,
+                taxKeyAfter = taxKey,
             };
             product.CategoryId = input.CategoryId;
             product.Sku = input.Sku.Trim();
@@ -188,7 +198,7 @@ public sealed class CatalogService(
             product.UnitPriceM = input.UnitPriceMinor;
             product.UnitStepQ = input.UnitStepQ;
             product.TrackStock = input.TrackStock;
-            product.TaxKey = input.TaxKey;
+            product.TaxKey = taxKey;
             product.IsActive = input.IsActive;
             product.UpdatedUtc = now;
             product.Version++;

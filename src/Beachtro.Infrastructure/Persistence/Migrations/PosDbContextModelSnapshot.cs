@@ -1274,7 +1274,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_ItemTaxComponents_Rate", " \"RatePpm\" BETWEEN 0 AND 1000000 ");
 
-                            t.HasCheckConstraint("CK_ItemTaxComponents_TreatmentCode_Domain", "\"TreatmentCode\" IN ('Unknown', 'Taxable', 'Exempt', 'ZeroRated', 'TestNoTax')");
+                            t.HasCheckConstraint("CK_ItemTaxComponents_TreatmentCode_Domain", "\"TreatmentCode\" IN ('Unknown', 'Taxable', 'Exempt', 'ZeroRated', 'TestNoTax', 'NotTaxed')");
                         });
                 });
 
@@ -1588,7 +1588,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_OrderItems_TrackStockSnapshot_Domain", "\"TrackStockSnapshot\" IN (0, 1)");
 
-                            t.HasCheckConstraint("CK_OrderItems_TreatmentCode_Domain", "\"TreatmentCode\" IN ('Unknown', 'Taxable', 'Exempt', 'ZeroRated', 'TestNoTax')");
+                            t.HasCheckConstraint("CK_OrderItems_TreatmentCode_Domain", "\"TreatmentCode\" IN ('Unknown', 'Taxable', 'Exempt', 'ZeroRated', 'TestNoTax', 'NotTaxed')");
                         });
                 });
 
@@ -2445,7 +2445,7 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_TaxConfigurations_TaxKey", "length(trim(\"TaxKey\")) > 0");
 
-                            t.HasCheckConstraint("CK_TaxConfigurations_TreatmentCode_Domain", "\"TreatmentCode\" IN ('Unknown', 'Taxable', 'Exempt', 'ZeroRated', 'TestNoTax')");
+                            t.HasCheckConstraint("CK_TaxConfigurations_TreatmentCode_Domain", "\"TreatmentCode\" IN ('Unknown', 'Taxable', 'Exempt', 'ZeroRated', 'TestNoTax', 'NotTaxed')");
                         });
                 });
 

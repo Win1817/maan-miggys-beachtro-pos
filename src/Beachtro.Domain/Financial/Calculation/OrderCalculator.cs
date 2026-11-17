@@ -168,6 +168,7 @@ public static class OrderCalculator
             case TreatmentCode.Exempt:
             case TreatmentCode.ZeroRated:
             case TreatmentCode.TestNoTax:
+            case TreatmentCode.NotTaxed:
                 if (components.Count != 0)
                 {
                     throw new FinancialRuleException(FinancialErrorCode.InvalidTaxPolicy, $"Line {line.LineNo} treatment {tax.Treatment} must not carry tax components.");

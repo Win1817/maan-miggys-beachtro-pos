@@ -10,7 +10,8 @@ public enum PriceMode
 /// <summary>
 /// Explicit tax treatment. Unknown is never equivalent to Exempt/ZeroRated; status is never
 /// inferred from a zero rate (finance design §Money and policy, D-01).
-/// TestNoTax exists only for synthetic Test-profile fixtures.
+/// TestNoTax exists only for synthetic Test-profile fixtures. NotTaxed is the business's own
+/// policy (POS-DEC-009): the POS charges no tax at all, so prices are final and no tax is computed.
 /// </summary>
 public enum TreatmentCode
 {
@@ -19,6 +20,7 @@ public enum TreatmentCode
     Exempt,
     ZeroRated,
     TestNoTax,
+    NotTaxed,
 }
 
 /// <summary>Draft profiles cannot calculate; Test is synthetic-only; Approved needs evidence (IB-06).</summary>
@@ -47,6 +49,9 @@ public sealed record TaxComponentRule(string Key, int RatePpm);
 public sealed record LineTaxRule(PriceMode PriceMode, TreatmentCode Treatment, IReadOnlyList<TaxComponentRule> Components)
 {
     public static LineTaxRule TestNoTax { get; } = new(PriceMode.Inclusive, TreatmentCode.TestNoTax, []);
+
+    /// <summary>The only rule the business uses (POS-DEC-009): the price is final and carries no tax.</summary>
+    public static LineTaxRule NotTaxed { get; } = new(PriceMode.Inclusive, TreatmentCode.NotTaxed, []);
 
     public static LineTaxRule Taxable(PriceMode mode, string key, int ratePpm) =>
         new(mode, TreatmentCode.Taxable, [new TaxComponentRule(key, ratePpm)]);

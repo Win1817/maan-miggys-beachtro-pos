@@ -1,4 +1,4 @@
-<UserControl x:Class="Beachtro.Desktop.Views.SettingsView"
+﻿<UserControl x:Class="Beachtro.Desktop.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
@@ -80,69 +80,16 @@
 
                     <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                         <StackPanel>
-                            <TextBlock Text="New tax (calculation) revision" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
-                            <TextBlock Style="{StaticResource Hint}" Text="Starts from the revision in effect now. Saving never changes past sales; it schedules a new revision. Unknown means the treatment is not confirmed yet: products using it cannot be sold. TestNoTax is for Test data only." />
-                            <Grid Margin="0,6,0,2">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="170" /><ColumnDefinition Width="150" /><ColumnDefinition Width="100" /><ColumnDefinition Width="140" /><ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="Tax entry key" Style="{StaticResource Label}" Margin="0" />
-                                <TextBlock Grid.Column="1" Text="Treatment" Style="{StaticResource Label}" Margin="0" />
-                                <TextBlock Grid.Column="2" Text="Rate %" Style="{StaticResource Label}" Margin="0" />
-                                <TextBlock Grid.Column="3" Text="Prices are" Style="{StaticResource Label}" Margin="0" />
-                            </Grid>
-                            <ItemsControl ItemsSource="{Binding TaxRows}" IsEnabled="{Binding CanEditFinancial}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,2">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="170" /><ColumnDefinition Width="150" /><ColumnDefinition Width="100" /><ColumnDefinition Width="140" /><ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBox Text="{Binding Key, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" AutomationProperties.Name="Tax entry key" />
-                                            <ComboBox Grid.Column="1" ItemsSource="{Binding Treatments}" SelectedItem="{Binding Treatment}" Margin="0,0,6,0" AutomationProperties.Name="Treatment" />
-                                            <TextBox Grid.Column="2" Text="{Binding RateText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,0" AutomationProperties.Name="Rate percent" />
-                                            <ComboBox Grid.Column="3" ItemsSource="{Binding PriceModes}" SelectedItem="{Binding PriceMode}" Margin="0,0,6,0" AutomationProperties.Name="Price mode" />
-                                            <Button Grid.Column="4" Content="Remove" Margin="0"
-                                                    Command="{Binding DataContext.RemoveTaxRowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <Button Content="Add tax entry" Command="{Binding AddTaxRowCommand}" HorizontalAlignment="Left" Margin="0,6,0,0" IsEnabled="{Binding CanEditFinancial}" />
-
-                            <TextBlock Text="Preview: how a sample price splits under this draft (nothing is saved)" Style="{StaticResource Label}" />
-                            <StackPanel Orientation="Horizontal">
-                                <TextBox Text="{Binding SamplePriceText, UpdateSourceTrigger=PropertyChanged}" Width="120" Margin="0,0,8,0" AutomationProperties.Name="Sample price" />
-                                <Button Content="Preview" Command="{Binding PreviewCommand}" />
-                            </StackPanel>
-                            <Border BorderBrush="{StaticResource Line}" BorderThickness="1" Background="#FAFAF9" Padding="10" Margin="0,8,0,0">
-                                <ContentControl Content="{Binding PreviewLines}" ContentTemplate="{StaticResource Lines}" Focusable="False" />
-                            </Border>
-
-                            <StackPanel IsEnabled="{Binding CanEditFinancial}">
-                                <WrapPanel Margin="0,10,0,0">
-                                    <StackPanel Margin="0,0,16,0">
-                                        <TextBlock Text="Approval state" Style="{StaticResource Label}" Margin="0" />
-                                        <ComboBox ItemsSource="{Binding States}" SelectedItem="{Binding CalcState}" Width="140" AutomationProperties.Name="Tax approval state" />
-                                    </StackPanel>
-                                    <StackPanel Margin="0,0,16,0">
-                                        <TextBlock Text="Starts" Style="{StaticResource Label}" Margin="0" />
-                                        <StackPanel Orientation="Horizontal">
-                                            <CheckBox Content="Now" IsChecked="{Binding CalcStartNow}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <TextBox Text="{Binding CalcStartText, UpdateSourceTrigger=PropertyChanged}" Width="160" AutomationProperties.Name="Tax start time"
-                                                     IsEnabled="{Binding CalcStartNow, Converter={StaticResource Not}}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </WrapPanel>
-                                <TextBlock Text="Approval evidence reference (for example a document name; required for Approved)" Style="{StaticResource Label}" />
-                                <TextBox Text="{Binding CalcEvidence, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Tax evidence" />
+                            <TextBlock Text="Tax" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Style="{StaticResource Hint}" Text="This POS charges no tax: prices are final and receipts show no tax lines (POS-DEC-009)." />
+                            <TextBlock Text="{Binding TaxStatus}" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            <StackPanel Visibility="{Binding NeedsNoTaxSwitch, Converter={StaticResource Visible}}" IsEnabled="{Binding CanEditFinancial}">
                                 <TextBlock Text="Confirm with your password" Style="{StaticResource Label}" />
                                 <StackPanel Orientation="Horizontal">
-                                    <PasswordBox x:Name="CalcPassword" Width="260" Margin="0,0,8,0" AutomationProperties.Name="Password for tax revision" />
-                                    <Button Content="Save tax revision" Style="{StaticResource Primary}" Command="{Binding SaveCalculationCommand}" CommandParameter="{Binding ElementName=CalcPassword}" />
+                                    <PasswordBox x:Name="NoTaxPassword" Width="260" Margin="0,0,8,0" AutomationProperties.Name="Password for no tax" />
+                                    <Button Content="Switch to no tax" Style="{StaticResource Primary}" Command="{Binding SwitchToNoTaxCommand}" CommandParameter="{Binding ElementName=NoTaxPassword}" />
                                 </StackPanel>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" Text="Approved is not offered: this build is Test-only until tax treatment is professionally confirmed (milestone 13)." />
                         </StackPanel>
                     </Border>
 
@@ -184,7 +131,7 @@
 
                     <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                         <StackPanel>
-                            <TextBlock Text="Tax revision history" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                            <TextBlock Text="Pricing revision history (tax status)" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
                             <ContentControl Content="{Binding CalculationHistory}" ContentTemplate="{StaticResource Lines}" Focusable="False" />
                             <TextBlock Text="Calendar revision history" Style="{StaticResource Subheading}" />
                             <ContentControl Content="{Binding CalendarHistory}" ContentTemplate="{StaticResource Lines}" Focusable="False" />
@@ -269,7 +216,7 @@
             <TabItem Header="Business" Visibility="{Binding CanViewProfiles, Converter={StaticResource Visible}}">
                 <ContentControl Content="{Binding Profiles}" ContentTemplate="{StaticResource BusinessTab}" Focusable="False" />
             </TabItem>
-            <TabItem Header="Tax and calendar" Visibility="{Binding CanViewProfiles, Converter={StaticResource Visible}}">
+            <TabItem Header="Calendar and tax" Visibility="{Binding CanViewProfiles, Converter={StaticResource Visible}}">
                 <ContentControl Content="{Binding Profiles}" ContentTemplate="{StaticResource TaxTab}" Focusable="False" />
             </TabItem>
             <TabItem Header="Backup and sync" Visibility="{Binding CanSeeBackupTab, Converter={StaticResource Visible}}">

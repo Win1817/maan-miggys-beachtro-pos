@@ -174,8 +174,13 @@ public sealed class ProfileTests : IDisposable
         Assert.Contains(initial.Blockers, b => b.Contains("calculation", StringComparison.Ordinal));
 
         // Synthetic "approved" inputs exercise the gate; they are not real approvals.
+        // An approved profile that still computes tax is refused: the business charges no tax (POS-DEC-009).
         Ok(await _h.Profiles.CreateCalculationProfileAsync(owner, new CalculationProfileDraft(ProfileApprovalState.Approved, Now, Currency.Php,
             [new TaxConfigurationDraft("SYN", SyntheticRate, PriceMode.Inclusive, TreatmentCode.Taxable)], "SYNTHETIC-EVIDENCE")));
+        Assert.Contains((await _h.Profiles.GetProductionReadinessAsync()).Blockers, b => b.Contains("still computes tax", StringComparison.Ordinal));
+        _h.Clock.Advance(TimeSpan.FromSeconds(1));
+        Ok(await _h.Profiles.CreateCalculationProfileAsync(owner, new CalculationProfileDraft(ProfileApprovalState.Approved, Now, Currency.Php,
+            [new TaxConfigurationDraft("NONE", 0, PriceMode.Inclusive, TreatmentCode.NotTaxed)], "SYNTHETIC-EVIDENCE")));
         Ok(await _h.Profiles.CreateCalendarProfileAsync(owner, new CalendarProfileDraft(ProfileApprovalState.Approved, Now, "Asia/Manila", 0, "SYNTHETIC-EVIDENCE")));
         Ok(await _h.Profiles.SaveBusinessProfileAsync(owner, new BusinessProfileDraft(ProfileApprovalState.Approved, "Synthetic Name", "Synthetic Address", null, null, 1, "SYNTHETIC-EVIDENCE")));
 
