@@ -52,6 +52,12 @@ public interface IRemoteStore
 
     /// <summary>Null when no file has that ID (which never proves a create was not sent).</summary>
     Task<RemoteObject?> GetAsync(string id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every file whose logicalKey property matches (recovery reconcile, POS-DEC-010). On Drive this is an
+    /// appProperties query, which can lag behind recent creates; an empty answer is evidence, not proof.
+    /// </summary>
+    Task<IReadOnlyList<RemoteObject>> FindAsync(string logicalKey, CancellationToken cancellationToken);
 }
 
 public interface IRemoteStoreFactory
@@ -120,6 +126,27 @@ public sealed class SimulatedDriveStore(string root) : IRemoteStore
         await using var stream = File.OpenRead(bin);
         var sha = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
         return new RemoteObject(id, m.FolderKey, m.Name, stream.Length, sha, m.Properties);
+    }
+
+    public async Task<IReadOnlyList<RemoteObject>> FindAsync(string logicalKey, CancellationToken cancellationToken)
+    {
+        var found = new List<RemoteObject>();
+        if (!Directory.Exists(Root))
+        {
+            return found;
+        }
+
+        foreach (var meta in Directory.EnumerateFiles(Root, "*.json"))
+        {
+            var m = JsonSerializer.Deserialize<Meta>(await File.ReadAllTextAsync(meta, cancellationToken).ConfigureAwait(false));
+            if (m?.Properties.GetValueOrDefault("logicalKey") == logicalKey
+                && await GetAsync(Path.GetFileNameWithoutExtension(meta), cancellationToken).ConfigureAwait(false) is { } remote)
+            {
+                found.Add(remote);
+            }
+        }
+
+        return found;
     }
 
     private static string Safe(string id) =>

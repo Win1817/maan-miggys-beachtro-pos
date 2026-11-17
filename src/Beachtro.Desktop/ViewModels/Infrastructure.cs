@@ -25,6 +25,8 @@ public sealed record PosServices(
     IPrintService Print,
     IReceiptPrinter Printer,
     IBackupService Backups,
+    IRecoveryService Recovery,
+    INumberSeriesService Numbers,
     IDemoDataService Demo,
     IShiftService Shifts,
     IReportService Reports,

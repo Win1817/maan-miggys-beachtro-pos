@@ -73,6 +73,47 @@ public sealed class BootstrapViewModel : AccessViewModel
 
     public string Username { get => _username; set => Set(ref _username, value); }
     public string DisplayName { get => _displayName; set => Set(ref _displayName, value); }
+
+    // Replacement PC (POS-DEC-010): restore a backup instead of creating a new owner.
+    private string _packagePath = string.Empty;
+    private string _restoreUsername = string.Empty;
+    private string _restoreReason = "Replacement PC";
+
+    public string PackagePath { get => _packagePath; set => Set(ref _packagePath, value); }
+    public string RestoreUsername { get => _restoreUsername; set => Set(ref _restoreUsername, value); }
+    public string RestoreReason { get => _restoreReason; set => Set(ref _restoreReason, value); }
+    public ICommand BrowseCommand => new RelayCommand(_ =>
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Choose the backup package", Filter = "Backup package (*.zip)|*.zip" };
+        if (dialog.ShowDialog() == true)
+        {
+            PackagePath = dialog.FileName;
+        }
+    });
+
+    public ICommand RestoreCommand => _restore ??= Command(async p =>
+    {
+        var password = ShellViewModel.TakePassword(p);
+        if (string.IsNullOrWhiteSpace(PackagePath) || string.IsNullOrWhiteSpace(RestoreUsername) || password.Length == 0)
+        {
+            Error = "Choose the backup package and enter an Owner or Administrator sign-in from that backup.";
+            return;
+        }
+
+        var result = await Task.Run(() => Shell.Services.Backups.RestoreOnNewDeviceAsync(PackagePath.Trim(), RestoreUsername, password, RestoreReason));
+        if (!result.IsSuccess)
+        {
+            Error = result.Message;
+            return;
+        }
+
+        Shell.Notice = "Backup restored on this PC. Sign in with your account from the backup. Selling stays paused: the Recovery page shows "
+            + $"{result.Value!.BlockedSeries.Count} number series and {result.Value.UnresolvedPreparedRequests} unfinished payment(s) to resolve first.";
+        Shell.ShowLogin();
+    });
+
+    private ICommand? _restore;
+
     public string PasswordRules => $"{PasswordPolicy.MinimumLength}–{PasswordPolicy.MaximumLength} characters. Spaces and any characters are allowed; a passphrase is easiest.";
     public ICommand CreateCommand { get; }
 }

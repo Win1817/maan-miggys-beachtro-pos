@@ -33,6 +33,7 @@ public sealed class ShellViewModel : ObservableObject
         ShowInventory = new RelayCommand(_ => Navigate(new InventoryViewModel(this)), _ => Can(Capabilities.InventoryAdjust));
         ShowSettings = new RelayCommand(_ => Navigate(new SettingsViewModel(this)),
             _ => Can(Capabilities.SettingsOperational) || Can(Capabilities.SettingsFinancial) || Can(Capabilities.BackupCreateVerify));
+        ShowRecovery = new RelayCommand(_ => Navigate(new RecoveryViewModel(this)), _ => Can(Capabilities.BackupRestore));
         ShowUsers = new RelayCommand(_ => Navigate(new UsersViewModel(this)), _ => Can(Capabilities.UsersManage));
         LockCommand = new RelayCommand(_ => Lock(), _ => IsSignedIn && CurrentPage is not LockViewModel);
         SignOutCommand = new RelayCommand(_ => SignOut(null), _ => IsSignedIn);
@@ -83,6 +84,7 @@ public sealed class ShellViewModel : ObservableObject
     public ICommand ShowInventory { get; }
     public ICommand ShowSettings { get; }
     public ICommand ShowUsers { get; }
+    public ICommand ShowRecovery { get; }
     public ICommand LockCommand { get; }
     public ICommand SignOutCommand { get; }
 
@@ -128,6 +130,15 @@ public sealed class ShellViewModel : ObservableObject
         await RefreshBusinessDateAsync();
 
         var session = Services.Sessions.Current!;
+
+        // During recovery, whoever can resolve it goes straight to the Recovery page (POS-DEC-010).
+        if (session.Has(Capabilities.BackupRestore)
+            && await Services.Recovery.GetStatusAsync(session) is { IsSuccess: true, Value.InRecovery: true })
+        {
+            Navigate(new RecoveryViewModel(this));
+            return;
+        }
+
         if (session.Has(Capabilities.PosSell))
         {
             Navigate(new PosViewModel(this));

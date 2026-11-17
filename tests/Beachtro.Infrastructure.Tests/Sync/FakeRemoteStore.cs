@@ -23,6 +23,17 @@ public sealed class FakeRemoteStore : IRemoteStore
     /// <summary>Thrown by the next create after the file was stored (lost acknowledgement).</summary>
     public RemoteStoreException? FailAfterCreate { get; set; }
 
+    /// <summary>While true, every call fails as a network outage (not one-shot).</summary>
+    public bool Offline { get; set; }
+
+    private void ThrowIfOffline()
+    {
+        if (Offline)
+        {
+            throw new RemoteStoreException(RemoteErrorKind.Transient, "offline", null);
+        }
+    }
+
     /// <summary>Number of upcoming reads that see nothing (eventual consistency).</summary>
     public int HiddenReads { get; set; }
 
@@ -32,6 +43,7 @@ public sealed class FakeRemoteStore : IRemoteStore
     public Task CreateAsync(string id, string folderKey, string name, byte[] content, IReadOnlyDictionary<string, string> properties, CancellationToken cancellationToken)
     {
         CreateCalls++;
+        ThrowIfOffline();
         if (FailBeforeCreate is { } before)
         {
             FailBeforeCreate = null;
@@ -55,6 +67,7 @@ public sealed class FakeRemoteStore : IRemoteStore
 
     public Task<RemoteObject?> GetAsync(string id, CancellationToken cancellationToken)
     {
+        ThrowIfOffline();
         if (HiddenReads > 0)
         {
             HiddenReads--;
@@ -65,6 +78,28 @@ public sealed class FakeRemoteStore : IRemoteStore
             ? new RemoteObject(id, f.Folder, f.Name, f.Bytes.LongLength, Convert.ToHexStringLower(SHA256.HashData(f.Bytes)), f.Properties)
             : null);
     }
+
+    /// <summary>Number of upcoming searches that see nothing (Drive search lag).</summary>
+    public int HiddenSearches { get; set; }
+
+    public async Task<IReadOnlyList<RemoteObject>> FindAsync(string logicalKey, CancellationToken cancellationToken)
+    {
+        if (HiddenSearches > 0)
+        {
+            HiddenSearches--;
+            return [];
+        }
+
+        var found = new List<RemoteObject>();
+        foreach (var id in Files.Where(f => f.Value.Properties.GetValueOrDefault("logicalKey") == logicalKey).Select(f => f.Key).ToArray())
+        {
+            found.Add((await GetAsync(id, cancellationToken))!);
+        }
+
+        return found;
+    }
+
+    public int CountFor(string logicalKey) => Files.Values.Count(f => f.Properties.GetValueOrDefault("logicalKey") == logicalKey);
 }
 
 public sealed class FakeRemoteFactory(IRemoteStore store) : IRemoteStoreFactory

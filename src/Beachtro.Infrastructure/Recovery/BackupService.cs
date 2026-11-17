@@ -31,7 +31,8 @@ public sealed class BackupService(
     IClock clock,
     WriteGate writeGate,
     LocalDataPaths paths,
-    Func<string, long>? freeSpace = null) : IBackupService
+    Func<string, long>? freeSpace = null,
+    Security.PosPasswordHasher? hasher = null) : IBackupService
 {
     public const string ManifestFile = "manifest.json";
     public const string DatabaseFile = "pos.db";
@@ -45,6 +46,7 @@ public sealed class BackupService(
 
     private static readonly HashSet<string> AllowedMembers = new(StringComparer.Ordinal) { ManifestFile, DatabaseFile, JournalFile, UploadJournalFile };
     private readonly Func<string, long> _freeSpace = freeSpace ?? Sync.SyncService.FreeBytes;
+    private readonly Security.PosPasswordHasher _hasher = hasher ?? new Security.PosPasswordHasher();
 
     public async Task<Result<BackupInfo>> CreateBackupAsync(UserSession session, CancellationToken cancellationToken = default)
     {
@@ -261,6 +263,37 @@ public sealed class BackupService(
             return auth.As<RestoreResult>();
         }
 
+        return await RestoreCoreAsync(backupFolder, reason, newDevice: null, session.UserId, session.DisplayName, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<Result<RestoreResult>> RestoreOnNewDeviceAsync(string packagePath, string username, string password, string reason, CancellationToken cancellationToken = default)
+    {
+        await using (var current = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var state = await current.InstallationState.AsNoTracking().SingleAsync(cancellationToken).ConfigureAwait(false);
+            if (state.BootstrapCompletedUtc is not null || await current.Users.AnyAsync(cancellationToken).ConfigureAwait(false)
+                || await current.Orders.AnyAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return Result<RestoreResult>.Fail(ResultStatus.Forbidden,
+                    "Restoring onto a new PC is only possible before the first owner account is created. Sign in and use the Recovery page instead.");
+            }
+        }
+
+        return await RestoreCoreAsync(packagePath, reason, new NewDeviceCredentials(username ?? string.Empty, password ?? string.Empty), Guid.Empty, string.Empty, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private sealed record NewDeviceCredentials(string Username, string Password);
+
+    /// <summary>
+    /// Shared restore (runbook steps 2–6). <paramref name="newDevice"/> null: same installation, signed-in
+    /// actor. Otherwise a replacement PC: the actor is the backup account whose credentials are given, the
+    /// backup's installation identity is adopted, and journals that cannot prove what the lost PC did
+    /// lead to holds rather than guesses (POS-DEC-010).
+    /// </summary>
+    private async Task<Result<RestoreResult>> RestoreCoreAsync(
+        string backupFolder, string reason, NewDeviceCredentials? newDevice, Guid actorId, string actorName, CancellationToken cancellationToken)
+    {
         var invalid = TextRules.ValidateRequired(reason, "Reason", TextRules.ReasonMaximum);
         if (invalid is not null)
         {
@@ -289,16 +322,31 @@ public sealed class BackupService(
             return Result<RestoreResult>.Fail(ResultStatus.Validation, "The backup cannot be restored: " + string.Join(" ", report.Problems));
         }
 
-        if (report.InstallationId != currentInstallation)
-        {
-            // Cloning another installation's ledger would duplicate number series (sync design §Transaction contracts).
-            return Result<RestoreResult>.Fail(ResultStatus.Validation, "This backup belongs to a different installation; a cross-installation restore needs a separately approved cutover.");
-        }
-
         var candidateDb = Path.Combine(backupFolder, DatabaseFile);
-        if (!UserExists(candidateDb, session.UserId))
+        if (newDevice is null)
         {
-            return Result<RestoreResult>.Fail(ResultStatus.Validation, "Your account does not exist in this backup; restore with an account that does.");
+            if (report.InstallationId != currentInstallation)
+            {
+                // Cloning another installation's ledger would duplicate number series (sync design §Transaction contracts).
+                return Result<RestoreResult>.Fail(ResultStatus.Validation, "This backup belongs to a different installation; a cross-installation restore needs a separately approved cutover.");
+            }
+
+            if (!UserExists(candidateDb, actorId))
+            {
+                return Result<RestoreResult>.Fail(ResultStatus.Validation, "Your account does not exist in this backup; restore with an account that does.");
+            }
+        }
+        else
+        {
+            var account = CheckBackupAccount(candidateDb, newDevice);
+            if (account is null)
+            {
+                // Same message for unknown name, wrong password, inactive or not allowed: no account probing.
+                return Result<RestoreResult>.Fail(ResultStatus.Unauthenticated,
+                    "Those sign-in details do not match an Owner or Administrator account in this backup.");
+            }
+
+            (actorId, actorName) = account.Value;
         }
 
         var now = clock.UtcNowMilliseconds;
@@ -306,7 +354,13 @@ public sealed class BackupService(
         var stamp = DateTimeOffset.FromUnixTimeMilliseconds(now).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
         var preserved = Path.Combine(paths.Recovery, $"restore_{stamp}_{runId:N}");
 
-        // 1. Preserve the current database, WAL/SHM and journal as evidence (copies, never moves).
+        // What the live journals can still prove, before anything changes.
+        var liveNumbers = numbering.Journal.Read();
+        var numbersUnprovable = !liveNumbers.Exists || !liveNumbers.Trustworthy
+            || liveNumbers.Records.Any(r => r.InstallationId != report.InstallationId);
+        var uploadJournalMissing = !File.Exists(paths.UploadJournalFile);
+
+        // 1. Preserve the current database, WAL/SHM and journals as evidence (copies, never moves).
         SqliteConnection.ClearAllPools();
         Directory.CreateDirectory(preserved);
         foreach (var suffix in new[] { string.Empty, "-wal", "-shm" })
@@ -323,6 +377,11 @@ public sealed class BackupService(
             File.Copy(paths.NumberJournalFile, Path.Combine(preserved, JournalFile));
         }
 
+        if (!uploadJournalMissing)
+        {
+            File.Copy(paths.UploadJournalFile, Path.Combine(preserved, UploadJournalFile));
+        }
+
         // 2. Replace the live database with the validated candidate. Stale WAL/SHM must not be replayed onto it.
         var staging = paths.DatabaseFile + ".restoring";
         File.Copy(candidateDb, staging, overwrite: true);
@@ -336,6 +395,17 @@ public sealed class BackupService(
 
         File.Move(staging, paths.DatabaseFile, overwrite: true);
 
+        // A new PC has no upload journal: the backup's copy keeps the identities known at backup time,
+        // but the lost PC may have uploaded more afterwards, so unknown identities are held.
+        var packagedUploads = Path.Combine(backupFolder, UploadJournalFile);
+        var uploadsMayBeStale = false;
+        if (uploadJournalMissing && File.Exists(packagedUploads))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(paths.UploadJournalFile)!);
+            File.Copy(packagedUploads, paths.UploadJournalFile);
+            uploadsMayBeStale = true;
+        }
+
         // 3. Bring the restored schema forward, pause selling, and reconcile numbering from the live journal.
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
         await db.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
@@ -346,31 +416,133 @@ public sealed class BackupService(
         state.Version++;
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        var reconciliation = await numbering.ReconcileAsync(db, "restore", cancellationToken).ConfigureAwait(false);
-        var uploads = await Sync.SyncReconciler.AfterRestoreAsync(db, new Sync.UploadJournal(paths.UploadJournalFile), now, cancellationToken).ConfigureAwait(false);
+        await numbering.ReconcileAsync(db, "restore", cancellationToken).ConfigureAwait(false);
+        var possiblyUsed = numbersUnprovable ? await BlockPossiblyUsedSeriesAsync(db, report.CreatedUtc, now, cancellationToken).ConfigureAwait(false) : 0;
+        var uploads = await Sync.SyncReconciler.AfterRestoreAsync(db, new Sync.UploadJournal(paths.UploadJournalFile), now, cancellationToken, uploadsMayBeStale)
+            .ConfigureAwait(false);
         var prepared = await db.CheckoutRequests.CountAsync(r => r.State == RequestState.Prepared, cancellationToken).ConfigureAwait(false)
             + await db.CorrectionRequests.CountAsync(r => r.State == RequestState.Prepared, cancellationToken).ConfigureAwait(false);
+        var blocked = await db.NumberSeries.AsNoTracking().Where(s => s.Status == NumberSeriesStatus.Blocked).OrderBy(s => s.SeriesKey)
+            .Select(s => new SeriesHold(s.SeriesKey, s.LastReservedSequence, s.EvidenceRef ?? "Blocked"))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         db.RecoveryRuns.Add(new RecoveryRun
         {
             Id = runId,
             StartedUtc = now,
-            ActorUserId = session.UserId,
+            ActorUserId = actorId,
             SourceBackupId = await db.Backups.AnyAsync(b => b.Id == report.BackupId, cancellationToken).ConfigureAwait(false) ? report.BackupId : null,
             SourceChecksum = Sha256File(candidateDb),
             PreservedDbPath = Path.GetRelativePath(paths.Root, preserved).Replace('\\', '/'),
-            NumberEvidenceJson = JsonSerializer.Serialize(new { blocked = reconciliation.Blocked.Select(b => b.SeriesKey), journalRepaired = reconciliation.JournalRepaired }),
+            NumberEvidenceJson = JsonSerializer.Serialize(new { blocked = blocked.Select(b => b.SeriesKey), numbersUnprovable, possiblyUsed }),
             ReconciledLastSale = report.LastSaleNumber,
             Disposition = RecoveryDisposition.Hold,
-            Notes = reason.Trim(),
+            Notes = (newDevice is null ? string.Empty : "Replacement PC. ") + reason.Trim(),
             NewGenerationId = Guid.NewGuid(),
+            UploadIdentityCutoffUtc = newDevice is null ? null : now,
         });
-        AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Recovery.Restored", "RecoveryRun", runId.ToString(), reason,
-            new { backupId = report.BackupId, lastSaleNumber = report.LastSaleNumber, blockedSeries = reconciliation.Blocked.Count, preparedRequests = prepared,
-                uploadsReset = uploads.Reset, uploadsAdopted = uploads.Adopted, uploadsHeld = uploads.Held });
+        AuditRecorder.Record(db, now, actorId, actorName, newDevice is null ? "Recovery.Restored" : "Recovery.RestoredOnNewDevice", "RecoveryRun", runId.ToString(), reason,
+            new { backupId = report.BackupId, lastSaleNumber = report.LastSaleNumber, blockedSeries = blocked.Count, possiblyUsed, preparedRequests = prepared,
+                uploadsReset = uploads.Reset, uploadsAdopted = uploads.Adopted, uploadsHeld = uploads.Held, replacedInstallation = newDevice is null ? (Guid?)null : currentInstallation });
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<RestoreResult>.Ok(new RestoreResult(runId, preserved, reconciliation.Blocked, prepared));
+        return Result<RestoreResult>.Ok(new RestoreResult(runId, preserved, blocked, prepared));
+    }
+
+    /// <summary>
+    /// The live journal cannot say what the lost PC numbered after the backup, so a series for every
+    /// business date from the backup's date to today is blocked until the owner proves its high-water mark.
+    /// </summary>
+    private static async Task<int> BlockPossiblyUsedSeriesAsync(PosDbContext db, long backupUtc, long now, CancellationToken cancellationToken)
+    {
+        var calendarJson = await db.PolicyVersions.AsNoTracking()
+            .Where(p => p.Kind == PolicyKind.Calendar && p.ApprovalState != Domain.Financial.Calculation.ProfileApprovalState.Draft && p.EffectiveFromUtc <= now)
+            .OrderByDescending(p => p.Revision).Select(p => p.CanonicalPayloadJson).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+        var calendar = calendarJson is null ? Domain.Calendar.CalendarPolicy.ManilaMidnight
+            : new Domain.Calendar.CalendarPolicy(ProfilePayloads.ReadCalendar(calendarJson).TimeZoneId, ProfilePayloads.ReadCalendar(calendarJson).CutoffMinute);
+        var first = DateOnly.ParseExact(calendar.BusinessDateFor(Math.Min(backupUtc, now)), "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var last = DateOnly.ParseExact(calendar.BusinessDateFor(now), "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (last.DayNumber - first.DayNumber > MaxRecoveryDays)
+        {
+            first = last.AddDays(-MaxRecoveryDays);
+        }
+
+        var added = 0;
+        for (var day = first; day <= last; day = day.AddDays(1))
+        {
+            var date = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var key = NumberSeriesService.SeriesKeyFor(date);
+            var series = await db.NumberSeries.SingleOrDefaultAsync(s => s.SeriesKey == key, cancellationToken).ConfigureAwait(false);
+            if (series is null)
+            {
+                db.NumberSeries.Add(new NumberSeries
+                {
+                    SeriesKey = key,
+                    BusinessDate = date,
+                    Prefix = NumberSeriesService.Prefix,
+                    LastReservedSequence = 0,
+                    Status = NumberSeriesStatus.Blocked,
+                    LastReconciledUtc = now,
+                    EvidenceRef = PossiblyUsedEvidence,
+                });
+                added++;
+            }
+            else if (series.Status == NumberSeriesStatus.Ready)
+            {
+                series.Status = NumberSeriesStatus.Blocked;
+                series.EvidenceRef = PossiblyUsedEvidence;
+                series.Version++;
+                added++;
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return added;
+    }
+
+    /// <summary>Upper bound on how many days of possibly-used series one restore blocks.</summary>
+    public const int MaxRecoveryDays = 366;
+
+    public const string PossiblyUsedEvidence = "The lost PC may have used numbers after the backup; enter the highest number known to be used (0 if none).";
+
+    /// <summary>The backup account for a new-PC restore: active, correct password, and allowed to restore.</summary>
+    private (Guid UserId, string DisplayName)? CheckBackupAccount(string candidateDb, NewDeviceCredentials credentials)
+    {
+        using var c = OpenConnection(candidateDb, readOnly: true, pooling: false);
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT Id, DisplayName, PasswordHash FROM Users WHERE NormalizedUsername = $n AND IsActive = 1;";
+        cmd.Parameters.AddWithValue("$n", UsernameRules.Normalize(credentials.Username));
+        string? id = null, name = null, hash = null;
+        using (var r = cmd.ExecuteReader())
+        {
+            if (r.Read())
+            {
+                (id, name, hash) = (r.GetString(0), r.GetString(1), r.GetString(2));
+            }
+        }
+
+        if (hash is null)
+        {
+            _hasher.Verify(_hasher.DummyHash, credentials.Password);
+            return null;
+        }
+
+        if (_hasher.Verify(hash, credentials.Password) == Security.PasswordCheck.Failed)
+        {
+            return null;
+        }
+
+        using var roles = c.CreateCommand();
+        roles.CommandText = "SELECT r.Key FROM UserRoles ur JOIN Roles r ON r.Id = ur.RoleId WHERE ur.UserId = $id;";
+        roles.Parameters.AddWithValue("$id", id);
+        using var rr = roles.ExecuteReader();
+        var allowed = false;
+        while (rr.Read())
+        {
+            allowed |= RoleTemplates.Grants.TryGetValue(rr.GetString(0), out var grants) && grants.Contains(Capabilities.BackupRestore);
+        }
+
+        return allowed ? (Guid.Parse(id!), name!) : null;
     }
 
     public async Task<Result<Unit>> ReopenAsync(UserSession session, string notes, CancellationToken cancellationToken = default)
@@ -393,6 +565,13 @@ public sealed class BackupService(
         if (blocked.Count > 0)
         {
             return Result.Fail(ResultStatus.Conflict, $"Resolve the number series on hold first: {string.Join(", ", blocked)}.");
+        }
+
+        var prepared = await db.CheckoutRequests.CountAsync(r => r.State == RequestState.Prepared, cancellationToken).ConfigureAwait(false)
+            + await db.CorrectionRequests.CountAsync(r => r.State == RequestState.Prepared, cancellationToken).ConfigureAwait(false);
+        if (prepared > 0)
+        {
+            return Result.Fail(ResultStatus.Conflict, $"Close the {prepared} unfinished payment(s) first; they may have been completed on the lost PC.");
         }
 
         var state = await db.InstallationState.SingleAsync(cancellationToken).ConfigureAwait(false);

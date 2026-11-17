@@ -1,0 +1,126 @@
+<UserControl x:Class="Beachtro.Desktop.Views.RecoveryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer Background="{StaticResource Page}" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16" MaxWidth="980" HorizontalAlignment="Left">
+            <TextBlock Text="Recovery" Style="{StaticResource Heading}" />
+            <Border Style="{StaticResource ErrorBox}" Visibility="{Binding Error, Converter={StaticResource Visible}}" Margin="0,0,0,8">
+                <TextBlock Text="{Binding Error}" Foreground="{StaticResource Danger}" TextWrapping="Wrap" />
+            </Border>
+            <Border Style="{StaticResource InfoBox}" Visibility="{Binding Info, Converter={StaticResource Visible}}" Margin="0,0,0,8">
+                <TextBlock Text="{Binding Info}" TextWrapping="Wrap" />
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Blockers}" Margin="0,6,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate><TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" Foreground="{StaticResource Danger}" Margin="0,2" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="Confirm with your password (valid for five minutes for the actions on this page)" Style="{StaticResource Label}" />
+                    <StackPanel Orientation="Horizontal">
+                        <PasswordBox x:Name="Password" Width="260" Margin="0,0,8,0" AutomationProperties.Name="Recovery password" />
+                        <Button Content="Confirm" Command="{Binding ConfirmCommand}" CommandParameter="{Binding ElementName=Password}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding ConfirmedNote}" Style="{StaticResource Hint}" Visibility="{Binding ConfirmedNote, Converter={StaticResource Visible}}" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding Series.Count, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="1. Number series on hold" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" Text="The PC cannot prove which receipt numbers were already used on these business dates. For each, enter the highest number known to be used (look at the last printed receipt or the uploaded sale files), or 0 if nothing was sold that day after the backup. Numbers are never reused." />
+                    <ItemsControl ItemsSource="{Binding Series}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,8" Margin="0,6,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Why}" Style="{StaticResource Hint}" />
+                                        <WrapPanel Margin="0,4,0,0">
+                                            <StackPanel Margin="0,0,12,0">
+                                                <TextBlock Text="Highest number used" Style="{StaticResource Label}" Margin="0" />
+                                                <TextBox Text="{Binding ProvenText, UpdateSourceTrigger=PropertyChanged}" Width="120" AutomationProperties.Name="Highest number used" />
+                                            </StackPanel>
+                                            <StackPanel Margin="0,0,12,0">
+                                                <TextBlock Text="Evidence" Style="{StaticResource Label}" Margin="0" />
+                                                <TextBox Text="{Binding Evidence, UpdateSourceTrigger=PropertyChanged}" Width="380" AutomationProperties.Name="Series evidence" />
+                                            </StackPanel>
+                                            <Button Content="Reopen this series" VerticalAlignment="Bottom"
+                                                    Command="{Binding DataContext.ResolveSeriesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding Prepared.Count, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="2. Unfinished payments" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" Text="These were started but not finished in the restored data. They may have been finished on the lost PC after the backup, so they are never completed here. Write what really happened (for example the receipt number you found, or that no money was taken) and close each one." />
+                    <ItemsControl ItemsSource="{Binding Prepared}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,8" Margin="0,6,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <WrapPanel Margin="0,4,0,0">
+                                            <TextBox Text="{Binding Reason, UpdateSourceTrigger=PropertyChanged}" Width="520" Margin="0,0,8,0" AutomationProperties.Name="What happened" />
+                                            <Button Content="Close" Command="{Binding DataContext.ClosePreparedCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="3. Uploads on hold" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Text="{Binding HeldText}" TextWrapping="Wrap" />
+                    <StackPanel Visibility="{Binding HeldUploads, Converter={StaticResource Visible}}" Margin="0,6,0,0">
+                        <TextBlock Text="What you checked (for example: destination folder reviewed on the business account)" Style="{StaticResource Label}" />
+                        <WrapPanel>
+                            <TextBox Text="{Binding ReleaseEvidence, UpdateSourceTrigger=PropertyChanged}" Width="520" Margin="0,0,8,0" AutomationProperties.Name="Upload evidence" />
+                            <Button Content="Check destination and release" Command="{Binding ReleaseUploadsCommand}"
+                                    Visibility="{Binding CanConfigureSync, Converter={StaticResource Visible}}" />
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource Hint}" Text="Turn the destination on first (Settings, Backup and sync). Uploads on hold never block reopening; they wait safely." />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12" Visibility="{Binding InRecovery, Converter={StaticResource Visible}}">
+                <StackPanel>
+                    <TextBlock Text="4. Reopen" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Record what was lost (for example: sales between the backup and the failure, with the receipt numbers you found) and how you checked. Reopening allows selling again and immediately makes a fresh verified backup." />
+                    <TextBox Text="{Binding ReopenNotes, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" MinHeight="60" TextWrapping="Wrap" Margin="0,6,0,0" AutomationProperties.Name="Reopen notes" />
+                    <Button Content="Reopen and back up" Style="{StaticResource Primary}" Command="{Binding ReopenCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Restore a backup" Style="{StaticResource Subheading}" Margin="0,0,0,6" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Replaces this PC's database with a backup package after checking it. The current database is kept as evidence first, and selling pauses until you reopen. On a brand-new PC, use 'Restore from a backup' on the first-run screen instead." />
+                    <WrapPanel Margin="0,6,0,0">
+                        <TextBox Text="{Binding PackagePath, UpdateSourceTrigger=PropertyChanged}" Width="560" Margin="0,0,8,0" AutomationProperties.Name="Backup package" />
+                        <Button Content="Browse…" Command="{Binding BrowseCommand}" />
+                        <Button Content="Check backup" Command="{Binding CheckBackupCommand}" />
+                    </WrapPanel>
+                    <TextBlock Text="{Binding CandidateReport}" TextWrapping="Wrap" Margin="0,6,0,0" Visibility="{Binding CandidateReport, Converter={StaticResource Visible}}" />
+                    <TextBlock Text="Reason" Style="{StaticResource Label}" />
+                    <TextBox Text="{Binding RestoreReason, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Restore reason" />
+                    <Button Content="Restore this backup" Style="{StaticResource DangerButton}" Command="{Binding RestoreCommand}" HorizontalAlignment="Left" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

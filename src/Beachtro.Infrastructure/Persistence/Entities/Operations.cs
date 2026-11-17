@@ -153,6 +153,12 @@ public sealed class RecoveryRun
     public RecoveryDisposition Disposition { get; set; }
     public required string Notes { get; set; }
     public Guid NewGenerationId { get; set; }
+
+    /// <summary>
+    /// Set by a replacement-PC restore (POS-DEC-010): files created before this instant may already have
+    /// been uploaded by the lost PC, so they are queued on hold until the destination is checked.
+    /// </summary>
+    public long? UploadIdentityCutoffUtc { get; set; }
 }
 
 public sealed class AuditLog

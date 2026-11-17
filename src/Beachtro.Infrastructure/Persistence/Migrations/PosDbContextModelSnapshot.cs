@@ -2009,6 +2009,9 @@ namespace Beachtro.Infrastructure.Persistence.Migrations
                     b.Property<long>("StartedUtc")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("UploadIdentityCutoffUtc")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ActorUserId");

@@ -15,7 +15,11 @@ public static class SyncReconciler
 {
     public sealed record Summary(int Reset, int Adopted, int Held);
 
-    public static async Task<Summary> AfterRestoreAsync(PosDbContext db, UploadJournal journal, long now, CancellationToken cancellationToken)
+    /// <param name="journalMayBeStale">
+    /// True on a new PC, where the journal came from the backup and the lost PC may have uploaded more
+    /// after it: items without a known identity are held (POS-DEC-010).
+    /// </param>
+    public static async Task<Summary> AfterRestoreAsync(PosDbContext db, UploadJournal journal, long now, CancellationToken cancellationToken, bool journalMayBeStale = false)
     {
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(journal);
@@ -52,6 +56,12 @@ public static class SyncReconciler
                 {
                     q.RemoteFileId = known.RemoteId;
                     adopted++;
+                }
+                else if (journalMayBeStale)
+                {
+                    q.State = SyncState.RecoveryHold;
+                    q.LastErrorCode = SyncService.Codes.IdentityJournalStale;
+                    held++;
                 }
             }
 

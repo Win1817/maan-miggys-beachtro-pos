@@ -122,6 +122,19 @@ public sealed class CheckoutService(
 
     public async Task<Result<SaleReceipt>> CompleteAsync(UserSession session, Guid requestId, PaymentInput payment, CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await CompleteCoreAsync(session, requestId, payment, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (SqliteErrors.IsBusy(ex))
+        {
+            // Every write here is inside a transaction or a single statement, so a busy failure leaves nothing partial.
+            return Result<SaleReceipt>.Fail(ResultStatus.StorageUnavailable, SqliteErrors.BusyMessage);
+        }
+    }
+
+    private async Task<Result<SaleReceipt>> CompleteCoreAsync(UserSession session, Guid requestId, PaymentInput payment, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(payment);
         var auth = await identity.AuthorizeAsync(session, Capabilities.PosSell, false, cancellationToken).ConfigureAwait(false);
         if (!auth.IsSuccess)
@@ -245,7 +258,7 @@ public sealed class CheckoutService(
             await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
             return Result<SaleReceipt>.Ok(await LoadReceiptAsync(db, orderId, warnings, cancellationToken).ConfigureAwait(false));
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (!SqliteErrors.IsBusy(ex))
         {
             // The transaction rolled back: the reserved number is a recorded gap and is never reused.
             return Result<SaleReceipt>.Fail(ResultStatus.OutcomeUnknown,

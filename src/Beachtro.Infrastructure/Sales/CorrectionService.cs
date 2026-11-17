@@ -89,6 +89,19 @@ public sealed class CorrectionService(
 
     public async Task<Result<CorrectionReceipt>> CompleteAsync(UserSession session, Guid requestId, RefundEvidence evidence, CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await CompleteCoreAsync(session, requestId, evidence, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (SqliteErrors.IsBusy(ex))
+        {
+            // Every write here is inside a transaction or a single statement, so a busy failure leaves nothing partial.
+            return Result<CorrectionReceipt>.Fail(ResultStatus.StorageUnavailable, SqliteErrors.BusyMessage);
+        }
+    }
+
+    private async Task<Result<CorrectionReceipt>> CompleteCoreAsync(UserSession session, Guid requestId, RefundEvidence evidence, CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(evidence);
         using var gate = await writeGate.EnterAsync(cancellationToken).ConfigureAwait(false);
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
@@ -295,7 +308,7 @@ public sealed class CorrectionService(
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (!SqliteErrors.IsBusy(ex))
         {
             return Result<CorrectionReceipt>.Fail(ResultStatus.OutcomeUnknown, "The correction could not be saved. Check its outcome before trying again; no money was moved by the system.");
         }

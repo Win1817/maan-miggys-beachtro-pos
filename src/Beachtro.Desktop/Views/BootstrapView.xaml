@@ -1,8 +1,9 @@
-<UserControl x:Class="Beachtro.Desktop.Views.BootstrapView"
+﻿<UserControl x:Class="Beachtro.Desktop.Views.BootstrapView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid Background="{StaticResource Page}">
-        <Border Style="{StaticResource Card}" Width="460" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="28">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+        <Border Style="{StaticResource Card}" Width="460" VerticalAlignment="Top" Padding="28" Margin="0,0,16,0">
             <StackPanel>
                 <TextBlock Text="Set up the owner account" Style="{StaticResource Heading}" />
                 <TextBlock Style="{StaticResource Hint}"
@@ -30,5 +31,25 @@
                 </Button>
             </StackPanel>
         </Border>
+        <Border Style="{StaticResource Card}" Width="420" VerticalAlignment="Top" Padding="28">
+            <StackPanel>
+                <TextBlock Text="Replacing a PC?" Style="{StaticResource Heading}" />
+                <TextBlock Style="{StaticResource Hint}"
+                           Text="Restore the shop's last backup package instead of starting empty. Sign in with an Owner or Administrator account from that backup. Selling stays paused until you resolve what the old PC may have done after the backup." />
+                <TextBlock Text="Backup package (.zip)" Style="{StaticResource Label}" />
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Browse…" Command="{Binding BrowseCommand}" Margin="8,0,0,0" />
+                    <TextBox Text="{Binding PackagePath, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Backup package path" />
+                </DockPanel>
+                <TextBlock Text="Username in the backup" Style="{StaticResource Label}" />
+                <TextBox Text="{Binding RestoreUsername, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Backup username" />
+                <TextBlock Text="Password in the backup" Style="{StaticResource Label}" />
+                <PasswordBox x:Name="RestorePassword" AutomationProperties.Name="Backup password" />
+                <TextBlock Text="Reason" Style="{StaticResource Label}" />
+                <TextBox Text="{Binding RestoreReason, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Restore reason" />
+                <Button Content="Restore from a backup" Margin="0,16,0,0" Command="{Binding RestoreCommand}" CommandParameter="{Binding ElementName=RestorePassword}" />
+            </StackPanel>
+        </Border>
+        </StackPanel>
     </Grid>
 </UserControl>

@@ -1,5 +1,6 @@
 using Beachtro.Application.Common;
 using Beachtro.Application.Security;
+using Beachtro.Domain.Model;
 
 namespace Beachtro.Application.Recovery;
 
@@ -45,5 +46,42 @@ public interface IBackupService
     /// </summary>
     Task<Result<RestoreResult>> RestoreAsync(UserSession session, string backupFolder, string reason, CancellationToken cancellationToken = default);
 
+    /// <summary>Refused while any number series is on hold or any prepared checkout/refund is unresolved.</summary>
     Task<Result<Unit>> ReopenAsync(UserSession session, string notes, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replacement PC (POS-DEC-010): allowed only on a brand-new installation (no owner, no sales). The
+    /// credentials must belong to an active account in the backup that may restore backups. The backup's
+    /// installation identity is kept; every series that may have been used on the lost PC is blocked.
+    /// </summary>
+    Task<Result<RestoreResult>> RestoreOnNewDeviceAsync(string packagePath, string username, string password, string reason, CancellationToken cancellationToken = default);
+}
+
+/// <summary>A checkout or refund prepared but never completed in the restored data.</summary>
+public sealed record PreparedRequestView(Guid RequestId, bool IsRefund, long PreparedUtc, string ActorName, long? TotalMinor, bool HasPaymentEvidence);
+
+public sealed record RecoveryRunView(Guid RunId, long StartedUtc, long? FinishedUtc, string? LastSaleNumber, string PreservedPath, string Disposition, string? Notes);
+
+public sealed record RecoveryStatus(
+    InstallationMode Mode,
+    RecoveryRunView? LatestRun,
+    IReadOnlyList<SeriesHold> BlockedSeries,
+    IReadOnlyList<PreparedRequestView> PreparedRequests,
+    int HeldUploads,
+    IReadOnlyList<string> ReopenBlockers)
+{
+    public bool InRecovery => Mode != InstallationMode.Normal;
+}
+
+/// <summary>The Recovery page's view of the runbook (IB-24): what still blocks reopening, and closing unfinished payments.</summary>
+public interface IRecoveryService
+{
+    /// <summary>Needs backup.restore.</summary>
+    Task<Result<RecoveryStatus>> GetStatusAsync(UserSession session, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Closes a prepared checkout or refund during recovery. It is never completed here, because it may
+    /// already have been completed on the lost PC; the reason records what really happened.
+    /// </summary>
+    Task<Result<Unit>> ClosePreparedRequestAsync(UserSession session, Guid requestId, string reason, CancellationToken cancellationToken = default);
 }

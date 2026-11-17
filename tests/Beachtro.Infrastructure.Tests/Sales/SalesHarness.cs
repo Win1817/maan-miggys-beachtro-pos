@@ -37,10 +37,11 @@ public sealed class SalesHarness : IDisposable
     public CheckoutService Checkout { get; private set; } = null!;
     public CorrectionService Corrections { get; private set; } = null!;
     public BackupService Backups { get; private set; } = null!;
+    public RecoveryService Recovery { get; private set; } = null!;
     public ShiftService Shifts { get; private set; } = null!;
     public ReportService Reports { get; private set; } = null!;
     public ArtifactMaterializer Materializer { get; private set; } = null!;
-    public FakeRemoteStore Remote { get; } = new();
+    public FakeRemoteStore Remote { get; private set; } = new();
     public SyncService Sync { get; private set; } = null!;
     public JobScheduler Scheduler { get; private set; } = null!;
 
@@ -63,20 +64,47 @@ public sealed class SalesHarness : IDisposable
 
     public static async Task<SalesHarness> CreateAsync()
     {
-        var h = new SalesHarness();
+        var h = Wire(new SalesHarness());
+        var s = h.Security;
+        h.Owner = await s.BootstrapOwnerAsync();
+        await SeedAsync(h);
+        return h;
+    }
+
+    /// <summary>
+    /// A brand-new installation on a replacement PC (recovery drill): its own empty data folder, no owner,
+    /// the same remote destination as the lost PC, and a clock set to <paramref name="nowUtc"/>.
+    /// </summary>
+    public static SalesHarness CreateBlankDevice(FakeRemoteStore remote, long nowUtc)
+    {
+        var h = new SalesHarness { Remote = remote };
+        h.Clock.Advance(TimeSpan.FromMilliseconds(nowUtc - h.Clock.UtcNowMilliseconds));
+        return Wire(h);
+    }
+
+    /// <summary>Signs the backup's owner in on this device (after a restore).</summary>
+    public async Task SignInOwnerAsync() => Owner = await Security.SignInAsync(OwnerUsername, OwnerPassword);
+
+    private static SalesHarness Wire(SalesHarness h)
+    {
         var s = h.Security;
         h.Numbers = new NumberSeriesService(s.Database.Factory, s.Identity, s.Clock, s.Gate, s.Database.Paths);
         h.Catalog = new CatalogService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
         h.Checkout = new CheckoutService(s.Database.Factory, s.Identity, s.Profiles, h.Numbers, s.Clock, s.Gate);
         h.Corrections = new CorrectionService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
-        h.Backups = new BackupService(s.Database.Factory, s.Identity, h.Numbers, s.Clock, s.Gate, s.Database.Paths, _ => h.FreeSpaceBytes);
+        h.Backups = new BackupService(s.Database.Factory, s.Identity, h.Numbers, s.Clock, s.Gate, s.Database.Paths, _ => h.FreeSpaceBytes, s.Hasher);
+        h.Recovery = new RecoveryService(s.Database.Factory, s.Identity, s.Clock, s.Gate);
         h.Shifts = new ShiftService(s.Database.Factory, s.Identity, s.Clock, s.Gate);
         h.Reports = new ReportService(s.Database.Factory, s.Identity, s.Profiles, s.Clock, s.Gate);
         h.Materializer = new ArtifactMaterializer(s.Database.Factory, s.Clock, s.Gate, s.Database.Paths);
         h.Sync = h.NewSyncWorker();
         h.Scheduler = new JobScheduler(s.Database.Factory, s.Profiles, s.Clock, s.Gate, h.Backups, h.Reports);
+        return h;
+    }
 
-        h.Owner = await s.BootstrapOwnerAsync();
+    private static async Task SeedAsync(SalesHarness h)
+    {
+        var s = h.Security;
         var now = s.Clock.UtcNowMilliseconds;
         Ok(await s.Profiles.CreateCalculationProfileAsync(h.Owner, new CalculationProfileDraft(ProfileApprovalState.Test, now, Currency.Php,
         [
@@ -91,7 +119,6 @@ public sealed class SalesHarness : IDisposable
         h.Cookie = await h.AddProductAsync("TEST-COOKIE", "Synthetic Cookie", 50_00, "NONE", stockUnits: 10);
         h.Taxed = await h.AddProductAsync("TEST-TAXED", "Synthetic Taxed Item", 35_00, "SYN", stockUnits: 10);
         h.Service = await h.AddProductAsync("TEST-SERVICE", "Synthetic Untracked", 20_00, "NONE", stockUnits: null);
-        return h;
     }
 
     public async Task<Guid> AddProductAsync(string sku, string name, long price, string taxKey, int? stockUnits)

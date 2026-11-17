@@ -48,6 +48,9 @@ public sealed class SyncService(
     {
         public const string IdentityJournalDamaged = "IdentityJournalDamaged";
         public const string IdentityJournalMissing = "IdentityJournalMissing";
+
+        /// <summary>Restored on a new PC: the backup's journal may predate uploads made on the lost PC (POS-DEC-010).</summary>
+        public const string IdentityJournalStale = "IdentityJournalStale";
         public const string RemoteMismatch = "RemoteMismatch";
         public const string RemoteConflict = "RemoteConflict";
         public const string NotVisibleYet = "NotVisibleYet";
@@ -229,6 +232,107 @@ public sealed class SyncService(
         return Result<int>.Ok(failed.Count);
     }
 
+    public async Task<Result<HoldRelease>> ReleaseHeldUploadsAsync(UserSession session, string evidence, CancellationToken cancellationToken = default)
+    {
+        var auth = await identity.AuthorizeAsync(session, Capabilities.SyncConfigure, true, cancellationToken).ConfigureAwait(false);
+        if (!auth.IsSuccess)
+        {
+            return auth.As<HoldRelease>();
+        }
+
+        var invalid = TextRules.ValidateRequired(evidence, "Evidence", TextRules.ReasonMaximum);
+        if (invalid is not null)
+        {
+            return Result<HoldRelease>.Fail(ResultStatus.Validation, invalid);
+        }
+
+        CloudStorageSettings? settings;
+        List<(Guid QueueId, int Version, string LogicalKey, string? Sha256)> held;
+        await using (var read = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            settings = await read.CloudStorageSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            if (settings is not { Enabled: true, BindingId: not null })
+            {
+                return Result<HoldRelease>.Fail(ResultStatus.Conflict, "Turn the destination on first, so existing copies can be found before anything is uploaded again.");
+            }
+
+            var binding = settings.BindingId.Value;
+            held = (await (from q in read.SyncQueue
+                           join a in read.ArtifactRecords on q.ArtifactId equals a.Id
+                           where q.State == SyncState.RecoveryHold && q.AccountBindingId == binding
+                           select new { q.Id, q.Version, a.LogicalKey, a.Sha256 })
+                    .ToListAsync(cancellationToken).ConfigureAwait(false))
+                .Select(r => (r.Id, r.Version, r.LogicalKey, (string?)r.Sha256)).ToList();
+        }
+
+        var store = stores.Create(settings);
+        if (store is null)
+        {
+            return Result<HoldRelease>.Fail(ResultStatus.Conflict, "The destination is not available in this build.");
+        }
+
+        // Search outside the write gate (network); apply under it with version checks.
+        var decisions = new List<(Guid QueueId, int Version, string? AdoptId, bool Release)>();
+        foreach (var h in held)
+        {
+            IReadOnlyList<RemoteObject> copies;
+            try
+            {
+                copies = await store.FindAsync(h.LogicalKey, cancellationToken).ConfigureAwait(false);
+            }
+            catch (RemoteStoreException ex)
+            {
+                return Result<HoldRelease>.Fail(ResultStatus.StorageUnavailable, "The destination could not be searched: " + ex.Message + " Nothing was changed.");
+            }
+
+            var same = copies.FirstOrDefault(c => h.Sha256 is not null && c.ContentSha256 == h.Sha256 && c.Properties.GetValueOrDefault("sha256") == h.Sha256);
+            string? adoptId = same?.Id;
+            decisions.Add((h.QueueId, h.Version, adoptId, same is null && copies.Count == 0));
+        }
+
+        using var gate = await writeGate.EnterAsync(cancellationToken).ConfigureAwait(false);
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var now = clock.UtcNowMilliseconds;
+        int adopted = 0, released = 0, still = 0;
+        foreach (var d in decisions)
+        {
+            var q = await db.SyncQueue.SingleOrDefaultAsync(x => x.Id == d.QueueId, cancellationToken).ConfigureAwait(false);
+            if (q is null || q.Version != d.Version || q.State != SyncState.RecoveryHold)
+            {
+                continue;
+            }
+
+            if (d.AdoptId is not null || d.Release)
+            {
+                // An adopted ID is read back by the next attempt (identity, size, checksum) before it counts as done.
+                q.RemoteFileId = d.AdoptId ?? q.RemoteFileId;
+                q.State = SyncState.Pending;
+                q.NextAttemptUtc = now;
+                q.LastErrorCode = null;
+                q.Version++;
+                if (d.AdoptId is not null)
+                {
+                    adopted++;
+                }
+                else
+                {
+                    released++;
+                }
+            }
+            else
+            {
+                q.LastErrorCode = Codes.RemoteConflict;
+                q.Version++;
+                still++;
+            }
+        }
+
+        AuditRecorder.Record(db, now, session.UserId, session.DisplayName, "Recovery.HeldUploadsReleased", "SyncQueue", null, evidence,
+            new { adopted, released, stillHeld = still });
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return Result<HoldRelease>.Ok(new HoldRelease(adopted, released, still));
+    }
+
     // ---------------------------------------------------------------- background cycle
 
     public async Task<SyncCycleResult> RunCycleAsync(CancellationToken cancellationToken = default)
@@ -296,6 +400,8 @@ public sealed class SyncService(
             .Where(a => a.State == ArtifactState.Ready && !db.SyncQueue.Any(q => q.ArtifactId == a.Id))
             .OrderBy(a => a.CreatedUtc).Take(500)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
+        // After a replacement-PC restore, files that existed then may already be on the destination.
+        var cutoff = await db.RecoveryRuns.MaxAsync(r => r.UploadIdentityCutoffUtc, cancellationToken).ConfigureAwait(false);
         var added = 0;
         foreach (var artifact in missing)
         {
@@ -312,7 +418,8 @@ public sealed class SyncService(
                 ArtifactId = artifact.Id,
                 DestinationFolderKey = location.FolderKey,
                 AccountBindingId = bindingId,
-                State = SyncState.Pending,
+                State = artifact.CreatedUtc < cutoff ? SyncState.RecoveryHold : SyncState.Pending,
+                LastErrorCode = artifact.CreatedUtc < cutoff ? Codes.IdentityJournalStale : null,
                 NextAttemptUtc = now,
                 CreatedUtc = now,
             });
